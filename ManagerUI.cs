@@ -53,7 +53,7 @@ static class ManagerUI
         catch (Exception e) { _nextDiag += 30f; Plugin.Log.Warning("[menu] ensure failed: " + e.Message); }
     }
 
-    /// <summary>Called by the main-menu "Mods" item.</summary>
+    /// <summary>Called by the main-menu "Mod Manager" item.</summary>
     public static void OpenFromMenu()
     {
         if (!Plugin.Asked.Value) return;

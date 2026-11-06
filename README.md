@@ -30,7 +30,7 @@ Stored in `UserData/MelonPreferences.cfg`, section `[ModManager]`:
 ## Limitations
 - It installs `.dll`, `.modcomponent` and `.zip` downloads. Mods distributed as `.7z`, `.rar` or an installer show a **Mod page** button instead.
 - An installed mod is recognised by the `MelonInfo` inside its DLL or by its file name. If the version is unknown (for example a hand-copied `.modcomponent`), auto-update leaves it alone and the manager offers the update instead.
-- The main-menu button borrows the colours of the *Quit* item; if the game updates its menu code, F8 still works.
+- The main-menu button depends on the game's menu code; if a game update breaks it, F8 still opens the manager.
 
 ## Building
 ```bash

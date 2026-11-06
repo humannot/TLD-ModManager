@@ -42,8 +42,6 @@ public sealed class Core
     readonly Action<string> _log;
 
     public List<ModEntry> Catalog { get; private set; } = new();
-    /// <summary>Titles updated by this session's UpdateAll (shown in the main-menu banner).</summary>
-    public readonly List<string> Updated = new();
     Dictionary<string, ModEntry> _index = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, InstalledMod> Installed { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> _manifest; // catalog name -> version we installed
@@ -360,7 +358,7 @@ public sealed class Core
         {
             // unknown local version (e.g. a hand-copied .modcomponent): offer it in the UI, never replace silently
             if (onlyAutoUpdate && (!m.Entry!.AutoUpdate || m.Version.Length == 0)) continue;
-            try { _log($"Updating {m.Entry!.Title}: {m.Version} -> {m.Entry.Version}"); Install(m.Entry); Updated.Add(m.Entry.Title); n++; }
+            try { _log($"Updating {m.Entry!.Title}: {m.Version} -> {m.Entry.Version}"); Install(m.Entry); n++; }
             catch (Exception ex) { _log($"Could not update {m.Key}: {ex.Message}"); }
         }
         if (n > 0) Scan();

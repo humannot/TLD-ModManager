@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace ModManager;
 
-// Adds a "Mod Manager" entry to the main menu, directly above "Quit". Same approach as SkyCoop's MULTIPLAYER button:
+// Adds a "Mod Manager" entry to the main menu, directly above "Quit":
 //  - a MainMenuItem with a type the game does not know goes into Panel_MainMenu.m_MenuItems (ConfigureMenu skips Debug and
 //    unowned upsell items, so it is the unknown type that gets it through to AddMenuItem), so every rebuild of the menu keeps it;
 //  - a model is also added to the menu's BasicMenu right away, because the menu is already built when we get here;
@@ -12,7 +12,7 @@ namespace ModManager;
 //  - the game looks the label and description up as Localization.Get(key); we answer those two keys in the game's language.
 static class MenuPatch
 {
-    const int ItemType = 77; // SkyCoop uses 31
+    const int ItemType = 77; // any value outside the game's MainMenuItemType enum
     const string LabelKey = "ModManager_Mods";
     const string DescKey = "GAMEPLAY_Description77"; // "GAMEPLAY_Description" + the item type, which the menu asks for on hover
     internal static readonly string ItemId = ItemType.ToString();
@@ -53,7 +53,7 @@ static class MenuPatch
         var models = bm.m_ItemModelList;
         int q = models.Count - 1;
         for (int i = 0; i < models.Count; i++) if (models[i].m_Id == "Quit") { q = i; break; }
-        var like = models[0]; // borrow the Survival Mode item's colours
+        var like = models[0]; // same text colours as the first menu item (Survival Mode)
         var open = (Il2CppSystem.Action)new System.Action(ManagerUI.OpenFromMenu);
         bm.AddItem(ItemId, ItemType, q, text, desc, "", open, like.m_NormalTint, like.m_HighlightTint);
         _applied = text;
