@@ -10,14 +10,22 @@ namespace ModManager;
 public sealed class Plugin : MelonPlugin
 {
     internal static Core Core = null!;
-    internal static MelonPreferences_Entry<bool> AutoUpdate = null!;
+    internal static MelonPreferences_Entry<bool> AutoUpdate = null!, Asked = null!;
+
+    internal static void SetAutoUpdate(bool on)
+    {
+        AutoUpdate.Value = on;
+        Asked.Value = true;
+        MelonPreferences.Save();
+    }
     internal static MelonLogger.Instance Log = null!;
 
     public override void OnPreModsLoaded()
     {
         Log = LoggerInstance;
-        AutoUpdate = MelonPreferences.CreateCategory("ModManager").CreateEntry("AutoUpdate", true,
-            description: "Update installed mods from tldmods.net at game start");
+        var cat = MelonPreferences.CreateCategory("ModManager");
+        AutoUpdate = cat.CreateEntry("AutoUpdate", false, description: "Update installed mods from tldmods.net at game start");
+        Asked = cat.CreateEntry("AskedAutoUpdate", false, description: "The first-run question about auto-update was answered");
         Core = new Core(MelonEnvironment.GameRootDirectory, s => Log.Msg(s));
         try
         {
@@ -25,7 +33,7 @@ public sealed class Plugin : MelonPlugin
             Core.LoadCatalog();
             Core.Scan();
             Log.Msg($"Каталог: {Core.Catalog.Count} модов, установлено: {Core.Installed.Count}");
-            if (AutoUpdate.Value && Core.UpdateAll(onlyAutoUpdate: true) is > 0 and var n) Log.Msg($"Обновлено модов: {n}");
+            if (Asked.Value && AutoUpdate.Value && Core.UpdateAll(onlyAutoUpdate: true) is > 0 and var n) Log.Msg($"Обновлено модов: {n}");
         }
         catch (Exception e) { Log.Error("Автообновление не удалось: " + e); }
     }

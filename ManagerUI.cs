@@ -31,16 +31,45 @@ static class ManagerUI
     public static void Update()
     {
         if (Plugin.Core == null) return;
-        if (Input.GetKeyDown(KeyCode.F8)) Toggle();
-        if (_open) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
+        if (Input.GetKeyDown(KeyCode.F8) && Plugin.Asked.Value) Toggle();
+        if (_open || !Plugin.Asked.Value) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
     }
 
     static void Toggle()
     {
         _open = !_open;
+        SetNgui(!_open);
+    }
+
+    static bool _nguiOn = true;
+    static void SetNgui(bool on)
+    {
         // NGUI would otherwise also receive the clicks that land on our window
-        try { foreach (var c in UnityEngine.Object.FindObjectsByType<UICamera>(FindObjectsSortMode.None)) c.enabled = !_open; }
+        _nguiOn = on;
+        try { foreach (var c in UnityEngine.Object.FindObjectsByType<UICamera>(FindObjectsSortMode.None)) c.enabled = on; }
         catch (Exception e) { Plugin.Log.Warning("UICamera: " + e.Message); }
+    }
+
+    static void DrawFirstRun()
+    {
+        if (_nguiOn) SetNgui(false); // UICameras can appear after the first frame, so keep them off until answered
+        GUI.Box(new Rect(0, 0, Screen.width, Screen.height), "", _dim);
+        float w = Mathf.Min(620, Screen.width - 40), h = 270;
+        var r = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
+        GUI.Box(r, "", _bg);
+        GUI.Label(new Rect(r.x + 24, r.y + 20, w - 48, 34), "АВТООБНОВЛЕНИЕ МОДОВ", _title);
+        GUI.Label(new Rect(r.x + 24, r.y + 66, w - 48, 120),
+            "Проверять и обновлять установленные моды с tldmods.net при каждом запуске игры?\n\n" +
+            "Обновление начнёт работать со следующего запуска. Изменить выбор можно в менеджере модов (F8).", _wrap);
+        float bw = (w - 48 - 16) / 2, by = r.yMax - 64;
+        bool? answer = null;
+        if (GUI.Button(new Rect(r.x + 24, by, bw, 42), "ДА, ОБНОВЛЯТЬ", _btnOn)) answer = true;
+        if (GUI.Button(new Rect(r.x + 24 + bw + 16, by, bw, 42), "НЕТ", _btn)) answer = false;
+        if (answer is bool on)
+        {
+            Plugin.SetAutoUpdate(on);
+            SetNgui(!_open);
+        }
     }
 
     // ---------------- drawing ----------------
@@ -51,6 +80,7 @@ static class ManagerUI
         EnsureStyles();
         RefreshRows();
 
+        if (!Plugin.Asked.Value) { DrawFirstRun(); return; }
         if (!_open)
         {
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenu" &&
@@ -67,6 +97,9 @@ static class ManagerUI
         float x = r.x + 22, y = r.y + 18;
         GUI.Label(new Rect(x, y, w - 200, 36), "МЕНЕДЖЕР МОДОВ", _title);
         GUI.Label(new Rect(x + 300, y + 8, 300, 24), "tldmods.net", _muted);
+        bool auto = Plugin.AutoUpdate.Value;
+        if (GUI.Button(new Rect(r.xMax - 64 - 350, y, 340, 36), "ОБНОВЛЯТЬ ПРИ ЗАПУСКЕ:  " + (auto ? "ДА" : "НЕТ"), auto ? _btnOn : _btn))
+            Plugin.SetAutoUpdate(!auto);
         if (GUI.Button(new Rect(r.xMax - 64, y, 42, 36), "✕", _btn)) Toggle();
         y += 52;
 
