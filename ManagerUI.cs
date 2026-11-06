@@ -21,10 +21,10 @@ static class ManagerUI
 
     static List<Row> _rows = new();
     static object _rowsInstalled, _rowsCatalog;
-    static int _rowsTab = -1, _updates;
+    static int _rowsTab = -1, _rowsSort = -1, _updates;
     static string _rowsSearch = "";
 
-    static GUIStyle _thumbText, _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
+    static GUIStyle _badge, _thumbText, _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
 
     // ---------------- input ----------------
 
@@ -105,7 +105,7 @@ static class ManagerUI
         if (!_open) return;
 
         GUI.Box(new Rect(0, 0, Screen.width, Screen.height), "", _dim);
-        float w = Mathf.Min(1180, Screen.width - 40), h = Mathf.Min(740, Screen.height - 40);
+        float w = Mathf.Min(1180, Screen.width - 40), h = Mathf.Min(800, Screen.height - 40);
         var r = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
         GUI.Box(r, "", _bg);
 
@@ -122,22 +122,39 @@ static class ManagerUI
         string[] tabs = { L.T("INSTALLED") + $" ({core.Installed.Count})", L.T("AVAILABLE") + $" ({core.Catalog.Count(e => !core.Installed.ContainsKey(e.Name))})", L.T("UPDATES") + $" ({_updates})" };
         for (int i = 0; i < tabs.Length; i++)
             if (Btn(new Rect(x + i * 202, y, 196, 34), tabs[i], _tab == i ? _btnOn : _btn)) { _tab = i; _listScroll = Vector2.zero; }
-        if (_tab == 1 && Btn(new Rect(x + 3 * 202, y, 150, 34), Plugin.TileView.Value ? "VIEW: TILES" : "VIEW: LIST", _btn))
+        Lbl(new Rect(r.xMax - 392, y + 6, 70, 24), "SEARCH", _muted);
+        SearchField(new Rect(r.xMax - 322, y, 300, 34));
+        y += 44;
+
+        // sort order; "Available" also gets the tiles / list switch
+        Lbl(new Rect(x, y + 3, 84, 24), "SORT BY", _muted);
+        string[] sorts = { "NAME", "UPDATED", "AUTHOR" };
+        for (int i = 0; i < sorts.Length; i++)
+        {
+            bool on = _sort == i;
+            if (Btn(new Rect(x + 84 + i * 128, y, 120, 30), L.T(sorts[i]) + (on ? (SortDescending ? "  v" : "  ^") : ""), on ? _btnOn : _btn))
+            {
+                if (on) _sortFlip = !_sortFlip; else { _sort = i; _sortFlip = false; }
+                _listScroll = Vector2.zero;
+            }
+        }
+        if (_tab == 1 && Btn(new Rect(r.xMax - 22 - 150, y, 150, 30), Plugin.TileView.Value ? "VIEW: TILES" : "VIEW: LIST", _btn))
         {
             Plugin.TileView.Value = !Plugin.TileView.Value;
             MelonLoader.MelonPreferences.Save();
             _listScroll = Vector2.zero;
         }
-        Lbl(new Rect(r.xMax - 392, y + 6, 70, 24), "SEARCH", _muted);
-        SearchField(new Rect(r.xMax - 322, y, 300, 34));
-        y += 48;
+        y += 40;
 
-        const float bottomH = 58;
-        float listW = Mathf.Floor(w * 0.56f), bodyH = r.yMax - y - bottomH - 14;
+        const float bottomH = 92;
+        float listW = Mathf.Floor(w * 0.56f), bodyH = r.yMax - y - bottomH - 10;
         DrawList(new Rect(x, y, listW, bodyH));
         DrawDetails(new Rect(x + listW + 14, y, r.xMax - 22 - (x + listW + 14), bodyH));
-        DrawBottom(new Rect(x, r.yMax - bottomH - 4, w - 44, 44));
+        DrawBottom(new Rect(x, r.yMax - 62, w - 44, 44));
     }
+
+    static int _sort; static bool _sortFlip; // 0 name, 1 updated, 2 author; each has a natural direction that a second click reverses
+    static bool SortDescending => (_sort == 1) ^ _sortFlip; // newest update first by default
 
     static void SearchField(Rect r)
     {
@@ -226,13 +243,19 @@ static class ManagerUI
     static void DrawBanner(ModEntry e, Rect r)
     {
         var tex = Img.Get(e.Banner);
+        bool drawn = false;
         if (tex != null && !_noDrawTexture)
         {
-            try { GUI.DrawTexture(r, tex, ScaleMode.ScaleAndCrop); return; }
+            try { GUI.DrawTexture(r, tex, ScaleMode.ScaleAndCrop); drawn = true; }
             catch (Exception ex) { _noDrawTexture = true; Plugin.Log.Warning("GUI.DrawTexture unavailable, using placeholders: " + ex.Message); }
         }
-        GUI.Box(r, "", _panel);
-        GUI.Label(new Rect(r.x + 8, r.y + 4, r.width - 16, r.height - 8), e.Title, _thumbText);
+        if (!drawn)
+        {
+            GUI.Box(r, "", _panel);
+            GUI.Label(new Rect(r.x + 8, r.y + 4, r.width - 16, r.height - 8), e.Title, _thumbText);
+        }
+        // the game version the mod was tested on, as a badge in the image's corner
+        if (e.TestedTld.Length > 0) GUI.Box(new Rect(r.xMax - 84, r.y + 6, 78, 22), "TLD v" + e.TestedTld, _badge);
     }
 
     static void DrawRow(Row row, Rect r)
@@ -241,7 +264,8 @@ static class ManagerUI
         GUI.Box(r, "", row.Key == _sel ? _rowSel : _row);
         var e = row.E;
         Lbl(new Rect(r.x + 12, r.y + 4, r.width - 280, 24), e?.Title ?? row.Key, _h2);
-        Lbl(new Rect(r.x + 12, r.y + 26, r.width - 280, 20), e != null ? e.Author : row.I != null && row.I.IsSelf ? "this plugin" : "not in the tldmods.net catalog", _muted);
+        Lbl(new Rect(r.x + 12, r.y + 26, r.width - 280, 20),
+            e != null ? e.Author + (e.TestedTld.Length > 0 ? "   |   TLD v" + e.TestedTld : "") : row.I != null && row.I.IsSelf ? "this plugin" : "not in the tldmods.net catalog", _muted);
 
         string ver = row.I != null && e != null && core.HasUpdate(row.I) ? $"{row.I.Version} -> {e.Version}" : row.I != null && row.I.Version.Length > 0 ? row.I.Version : e != null ? e.Version : "";
         Lbl(new Rect(r.xMax - 268, r.y + 14, 120, 24), ver, e != null && e.Error ? _bad : _muted);
@@ -280,6 +304,7 @@ static class ManagerUI
         string catalogVer = e != null && e.Version.Length > 0 ? e.Version : "-";
         string localVer = inst == null ? L.T("no") : inst.Version.Length > 0 ? inst.Version : "?";
         Lbl(new Rect(x, y, w, 22), L.T("Version: ") + catalogVer + "   |   " + L.T("installed: ") + localVer, _text); y += 26;
+        if (e != null && e.TestedTld.Length > 0) { Lbl(new Rect(x, y, w, 22), L.T("Game version: ") + "TLD v" + e.TestedTld, _text); y += 24; }
         if (e != null && e.Error) { Lbl(new Rect(x, y, w, 22), "! Marked as broken on tldmods.net", _bad); y += 24; }
 
         // dependencies
@@ -311,7 +336,7 @@ static class ManagerUI
         y += 46;
 
         // description
-        var desc = e != null ? e.Description : inst.IsSelf ? "This is Mod Manager itself: it updates your other mods and installs new ones from tldmods.net." : "Files: " + string.Join(", ", inst.Files);
+        var desc = e != null ? (Translated.TryGetValue(e.Name, out var tr) && ShowTranslation.ContainsKey(e.Name) ? tr : e.Description) : inst.IsSelf ? "This is Mod Manager itself: it updates your other mods and installs new ones from tldmods.net." : "Files: " + string.Join(", ", inst.Files);
         var descArea = new Rect(x, y, w, area.yMax - y - 12);
         if (descArea.height < 24) return; // the banner and a long dependency list used the space
         float th = _wrap.CalcHeight(new GUIContent(desc), w - 22);
@@ -331,9 +356,30 @@ static class ManagerUI
         x += 218;
         if (Btn(new Rect(x, r.y, 170, r.height), "REFRESH LIST", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
         x += 178;
+        var sel = core.Find(_sel);
+        // the free translation service is used for Russian only; the button needs a catalog description to work on
+        if (L.Russian && sel != null && sel.Description.Length > 0 &&
+            Btn(new Rect(x, r.y, 250, r.height), ShowTranslation.ContainsKey(sel.Name) ? "SHOW ORIGINAL" : "TRANSLATE DESCRIPTION", _btn))
+            ToggleTranslation(sel);
         if (Btn(new Rect(r.xMax - 240, r.y, 240, r.height), "RESTART GAME", _restartNeeded ? _btnOn : _btn)) Restart();
         var status = _busy ? _status + "  " + L.T("please wait...") : _restartNeeded && _status.Length == 0 ? L.T("Changes apply after a restart") : _status;
-        Lbl(new Rect(x + 6, r.y, r.xMax - 250 - x, r.height), status, _statusErr ? _bad : _muted);
+        Lbl(new Rect(r.x, r.y - 28, r.width, 24), status, _statusErr ? _bad : _muted);
+    }
+
+    // mod name -> Russian description; written by the worker thread, read by OnGUI
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Translated = new();
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ShowTranslation = new();
+
+    static void ToggleTranslation(ModEntry e)
+    {
+        if (ShowTranslation.TryRemove(e.Name, out _)) return;
+        if (Translated.ContainsKey(e.Name)) { ShowTranslation[e.Name] = true; return; }
+        Run(L.T("Translating description"), () => { }, changesFiles: false, custom: () =>
+        {
+            Translated[e.Name] = Plugin.Core.Translate(e.Description, "ru");
+            ShowTranslation[e.Name] = true;
+            return L.T("Description translated (machine translation by MyMemory)");
+        });
     }
 
     // ---------------- data ----------------
@@ -341,8 +387,9 @@ static class ManagerUI
     static void RefreshRows()
     {
         var core = Plugin.Core;
-        if (_rowsTab == _tab && _rowsSearch == _search && ReferenceEquals(_rowsInstalled, core.Installed) && ReferenceEquals(_rowsCatalog, core.Catalog)) return;
-        _rowsTab = _tab; _rowsSearch = _search; _rowsInstalled = core.Installed; _rowsCatalog = core.Catalog;
+        var sortKey = _sort * 2 + (_sortFlip ? 1 : 0);
+        if (_rowsTab == _tab && _rowsSearch == _search && _rowsSort == sortKey && ReferenceEquals(_rowsInstalled, core.Installed) && ReferenceEquals(_rowsCatalog, core.Catalog)) return;
+        _rowsTab = _tab; _rowsSearch = _search; _rowsSort = sortKey; _rowsInstalled = core.Installed; _rowsCatalog = core.Catalog;
 
         var inst = core.Installed;
         _updates = inst.Values.Count(core.HasUpdate);
@@ -357,7 +404,16 @@ static class ManagerUI
             rows = rows.Where(r => (r.E != null ? r.E.Title : r.Key).Contains(q, StringComparison.OrdinalIgnoreCase) || r.Key.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                                    (r.E != null && r.E.Author.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
                                    (r.E != null && r.E.Categories.Any(c => c.Contains(q, StringComparison.OrdinalIgnoreCase))));
-        _rows = rows.ToList();
+        // mods the catalog does not know have no author or date, so they group together at one end
+        Func<Row, string> key = _sort switch
+        {
+            1 => r => r.E != null ? r.E.Updated : "",
+            2 => r => r.E != null ? r.E.Author : "",
+            _ => r => r.E != null ? r.E.Title : r.Key,
+        };
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        var ordered = SortDescending ? rows.OrderByDescending(key, cmp) : rows.OrderBy(key, cmp);
+        _rows = ordered.ThenBy(r => r.E != null ? r.E.Title : r.Key, cmp).ToList();
     }
 
     // ---------------- actions ----------------
@@ -446,6 +502,7 @@ static class ManagerUI
         _bad = Label(new Color(0.88f, 0.42f, 0.36f), 15, FontStyle.Bold);
         _warn = Label(new Color(0.93f, 0.72f, 0.38f), 14, FontStyle.Bold);
         _wrap = Label(Cream, 15); _wrap.wordWrap = true; _wrap.alignment = TextAnchor.UpperLeft;
+        _badge = Box(new Color(0.04f, 0.05f, 0.06f, 0.88f)); _badge.fontSize = 12; _badge.fontStyle = FontStyle.Bold; _badge.alignment = TextAnchor.MiddleCenter;
         _thumbText = Label(Muted, 16, FontStyle.Bold); _thumbText.wordWrap = true; _thumbText.alignment = TextAnchor.MiddleCenter;
         _none = new GUIStyle();
         _ok.alignment = _warn.alignment = TextAnchor.MiddleCenter;

@@ -8,6 +8,8 @@ namespace ModManager;
 public sealed class ModEntry
 {
     public string Name = "", Title = "", Type = "mod", Author = "", Description = "", Version = "", ModUrl = "";
+    /// <summary>Date of the last update on tldmods.net (ISO yyyy-MM-dd, so it sorts as text) and the game version the mod was tested on.</summary>
+    public string Updated = "", TestedTld = "";
     public string[] Aliases = Array.Empty<string>(), Dependencies = Array.Empty<string>(),
         Downloads = Array.Empty<string>(), Categories = Array.Empty<string>(), Images = Array.Empty<string>();
 
@@ -104,7 +106,9 @@ public sealed class Core
                 var m = new ModEntry
                 {
                     Name = Str(e, "Name"), Type = Str(e, "Type"), Author = Str(e, "Author"), Version = Str(e, "Version"),
-                    ModUrl = Str(e, "ModUrl"), Aliases = Arr(e, "Aliases"), Dependencies = Arr(e, "Dependencies"),
+                    ModUrl = Str(e, "ModUrl"), Updated = Str(e, "Updated"),
+                    TestedTld = e.TryGetProperty("TestedOn", out var tested) && tested.ValueKind == JsonValueKind.Object ? Str(tested, "tld") : "",
+                    Aliases = Arr(e, "Aliases"), Dependencies = Arr(e, "Dependencies"),
                     Categories = Arr(e, "Categories"), Downloads = Arr(e, "Downloads"), Images = Arr(e, "Images"),
                     Error = Bool(e, "Error"), AutoUpdate = Bool(e, "AutoUpdate"),
                     Description = Regex.Replace(Regex.Replace(Str(e, "Description"), "<br\\s*/?>", "\n", RegexOptions.IgnoreCase), "<[^>]+>", ""),
@@ -302,6 +306,73 @@ public sealed class Core
         }
         bool png = bytes.Length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50, jpg = bytes.Length > 8 && bytes[0] == 0xFF && bytes[1] == 0xD8;
         return png || jpg ? bytes : null;
+    }
+
+    // ---------------- description translation (MyMemory: free, no key) ----------------
+
+    const string TranslateUrl = "https://api.mymemory.translated.net/get";
+    Dictionary<string, string> _translations;
+
+    /// <summary>
+    /// Translates English text to <paramref name="toLang"/> (ISO code) line by line, in pieces of at most 450 bytes (the API's limit is 500).
+    /// Results are cached in UserData/ModManager/translations.json because the anonymous quota is 5,000 characters a day. Blocking; call off the main thread.
+    /// </summary>
+    public string Translate(string text, string toLang)
+    {
+        lock (_lock)
+        {
+            if (_translations == null)
+            {
+                try { _translations = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(DataDir, "translations.json"))) ?? new(); }
+                catch { _translations = new(); }
+            }
+            if (_translations.TryGetValue(toLang + "|" + text, out var cached)) return cached;
+        }
+        var lines = text.Split('\n').Select(line => line.Trim().Length == 0 ? "" : string.Join(" ", Pieces(line.Trim(), 450).Select(p => TranslatePiece(p, toLang))));
+        var result = string.Join("\n", lines);
+        lock (_lock)
+        {
+            _translations[toLang + "|" + text] = result;
+            File.WriteAllText(Path.Combine(DataDir, "translations.json"), JsonSerializer.Serialize(_translations));
+        }
+        return result;
+    }
+
+    /// <summary>Splits one line at sentence ends into pieces of at most <paramref name="maxBytes"/> UTF-8 bytes (a longer sentence is cut mid-way).</summary>
+    public static IEnumerable<string> Pieces(string line, int maxBytes)
+    {
+        var enc = System.Text.Encoding.UTF8;
+        var cur = new System.Text.StringBuilder();
+        foreach (var sentence in Regex.Split(line, @"(?<=[.!?])\s+"))
+        {
+            var s = sentence;
+            while (enc.GetByteCount(s) > maxBytes) // at most 3 bytes per UTF-16 unit outside surrogate pairs; 4 bytes per pair
+            {
+                if (cur.Length > 0) { yield return cur.ToString(); cur.Clear(); }
+                int n = Math.Min(s.Length, maxBytes / 3);
+                if (n < s.Length && char.IsHighSurrogate(s[n - 1])) n--;
+                yield return s.Substring(0, n);
+                s = s.Substring(n);
+            }
+            if (s.Length == 0) continue;
+            if (cur.Length > 0 && enc.GetByteCount(cur.ToString()) + 1 + enc.GetByteCount(s) > maxBytes) { yield return cur.ToString(); cur.Clear(); }
+            if (cur.Length > 0) cur.Append(' ');
+            cur.Append(s);
+        }
+        if (cur.Length > 0) yield return cur.ToString();
+    }
+
+    string TranslatePiece(string piece, string toLang)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var json = Http.GetStringAsync($"{TranslateUrl}?q={Uri.EscapeDataString(piece)}&langpair=en|{toLang}", cts.Token).GetAwaiter().GetResult();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("quotaFinished", out var q) && q.ValueKind == JsonValueKind.True)
+            throw new InvalidOperationException("Free translation limit reached for today, try again tomorrow");
+        var status = root.TryGetProperty("responseStatus", out var s) ? s.ToString() : "200";
+        if (status != "200") throw new InvalidOperationException("Translation service answered " + status);
+        return System.Net.WebUtility.HtmlDecode(Str(root.GetProperty("responseData"), "translatedText"));
     }
 
     // ---------------- self update (GitHub releases) ----------------

@@ -2,6 +2,8 @@
 
 A MelonLoader plugin for **The Long Dark** that keeps your mods up to date and lets you browse and install new ones from inside the game. Mod data comes from [tldmods.net](https://tldmods.net/).
 
+> **Unofficial project.** This plugin is not affiliated with, endorsed by or connected to Hinterland Studio (the developers of The Long Dark), the developers of MelonLoader, or the tldmods.net website. All names belong to their respective owners.
+
 ## Features
 - **Auto-update on launch.** The plugin loads before your mods, compares installed versions with tldmods.net and replaces outdated files before the game loads them, so no extra restart is needed.
 - **In-game manager.** Open it with the **Mod Manager** button in the main menu (right above *Quit*) or with **F8**:
@@ -10,6 +12,9 @@ A MelonLoader plugin for **The Long Dark** that keeps your mods up to date and l
   - every dependency is marked present or missing, and **Download missing** fetches the rest;
   - update one mod or all of them, remove a mod;
   - **Open mods folder** and **Restart game** buttons.
+- **Sorting** by name, last update or author; click the active sort again to reverse it.
+- **Game version.** Every mod shows the game version it was last tested on (for example `TLD v2.59`), as a badge on its image, in the list and in the details.
+- **Translate description.** With the game in Russian, a button at the bottom translates the selected mod's description into Russian and back to the original. It uses the free [MyMemory](https://mymemory.translated.net/) service (no key; machine translation; about 5,000 characters a day, results are cached in `UserData/ModManager/translations.json`). The description text is sent to that service.
 - **Tiles with preview images** on the *Available* tab, like tldmods.net (switch to a plain list with *VIEW*); *Installed* and *Updates* stay lists. Previews are cached in `UserData/ModManager/img`. PNG and JPEG are shown; mods whose only image is WebP or GIF show their name instead.
 - **Ask on first run.** The first time the game starts with the plugin you are asked whether to update mods at launch; if you say yes, updating starts from the next launch. You can flip it any time with the *UPDATE ON LAUNCH* button in the manager.
 - If a mod file is locked by the running game, the change is applied on the next launch (`UserData/ModManager/pending`).
