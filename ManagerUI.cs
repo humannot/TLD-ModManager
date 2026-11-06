@@ -37,12 +37,13 @@ static class ManagerUI
         if (_open) Img.Pump();
     }
 
-    // Every 2 s in the main menu: make sure the Mods item is there (the menu may have been built before our patch, or rebuilt since).
+    // Twice a second in the main menu: make sure the Mod Manager item is there and in the current language
+    // (the menu may have been built before our patch, rebuilt since, or the language may have changed).
     static float _nextDiag; static int _diagCount;
     static void MenuDiagnostic()
     {
         if (Time.realtimeSinceStartup < _nextDiag || !InMainMenu) return;
-        _nextDiag = Time.realtimeSinceStartup + 2f;
+        _nextDiag = Time.realtimeSinceStartup + 0.5f;
         try
         {
             var panel = InterfaceManager.GetPanel<Panel_MainMenu>();
@@ -103,11 +104,7 @@ static class ManagerUI
         RefreshRows();
 
         if (!Plugin.Asked.Value) { DrawFirstRun(); return; }
-        if (!_open)
-        {
-            if (InMainMenu) DrawBanner();
-            return;
-        }
+        if (!_open) return;
 
         GUI.Box(new Rect(0, 0, Screen.width, Screen.height), "", _dim);
         float w = Mathf.Min(1180, Screen.width - 40), h = Mathf.Min(740, Screen.height - 40);
@@ -157,23 +154,6 @@ static class ManagerUI
         else if (e.character >= ' ' && e.character != (char)127) { _search += e.character; e.Use(); }
     }
 
-    static void DrawBanner()
-    {
-        var core = Plugin.Core;
-        bool auto = Plugin.AutoUpdate.Value;
-        string line2 = core.Updated.Count > 0 ? L.T("Updated at launch: ") + Shorten(string.Join(", ", core.Updated), 46)
-            : _updates > 0 ? _updates + L.T(_updates == 1 ? " update available" : " updates available")
-            : L.T("All mods are up to date");
-        var r = new Rect(24, Screen.height - 112, 400, 78);
-        GUI.Box(r, "", _panel);
-        Lbl(new Rect(r.x + 14, r.y + 6, r.width - 28, 24), auto ? "MOD MANAGER   AUTO-UPDATE: ON" : "MOD MANAGER   AUTO-UPDATE: OFF", auto ? _ok : _h2);
-        Lbl(new Rect(r.x + 14, r.y + 30, r.width - 28, 22), line2, _text);
-        Lbl(new Rect(r.x + 14, r.y + 52, r.width - 28, 20), "Click to open  (F8)", _muted);
-        if (Btn(r, "", _none)) OpenFromMenu();
-    }
-
-    static string Shorten(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 3) + "...";
-
     static void DrawFirstRun()
     {
         if (_nguiOn) SetNgui(false); // UICameras can appear after the first frame, so keep them off until answered
@@ -184,7 +164,7 @@ static class ManagerUI
         Lbl(new Rect(r.x + 24, r.y + 20, w - 48, 34), "AUTO-UPDATE MODS", _title);
         Lbl(new Rect(r.x + 24, r.y + 66, w - 48, 120),
             "Check tldmods.net and update your installed mods every time the game starts?\n\n" +
-            "Updating starts from the next launch. You can change this any time in the mod manager (Mods in the main menu, or F8).", _wrap);
+            "Updating starts from the next launch. You can change this any time in the mod manager (Mod Manager in the main menu, or F8).", _wrap);
         float bw = (w - 48 - 16) / 2, by = r.yMax - 64;
         bool? answer = null;
         if (Btn(new Rect(r.x + 24, by, bw, 42), "YES, UPDATE", _btnOn)) answer = true;
@@ -205,7 +185,8 @@ static class ManagerUI
             Lbl(new Rect(area.x + 16, area.y + 16, area.width - 32, 30), Plugin.Core.Catalog.Count == 0 ? "Catalog not loaded - no network?" : "Nothing found", _muted);
             return;
         }
-        if (_tab == 1 && Plugin.TileView.Value) { DrawTiles(area); return; }
+        // _rowsTab, not _tab: a tab button clicked earlier this frame changes _tab before the rows are rebuilt
+        if (_rowsTab == 1 && Plugin.TileView.Value) { DrawTiles(area); return; }
         var view = new Rect(0, 0, area.width - 22, _rows.Count * rh);
         _listScroll = GUI.BeginScrollView(area, _listScroll, view);
         int first = Mathf.Max(0, (int)(_listScroll.y / rh)), last = Mathf.Min(_rows.Count, first + (int)(area.height / rh) + 2);

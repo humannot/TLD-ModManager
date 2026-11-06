@@ -1,17 +1,16 @@
-# TLD Mod Manager
+﻿# TLD Mod Manager
 
 A MelonLoader plugin for **The Long Dark** that keeps your mods up to date and lets you browse and install new ones from inside the game. Mod data comes from [tldmods.net](https://tldmods.net/).
 
 ## Features
 - **Auto-update on launch.** The plugin loads before your mods, compares installed versions with tldmods.net and replaces outdated files before the game loads them, so no extra restart is needed.
-- **In-game manager.** Open it with the **Mods** button in the main menu (right above *Quit*) or with **F8**:
+- **In-game manager.** Open it with the **Mod Manager** button in the main menu (right above *Quit*) or with **F8**:
   - tabs for *Installed*, *Available* and *Updates*, plus search by name, author or category;
   - one-click install, with all dependencies installed first;
   - every dependency is marked present or missing, and **Download missing** fetches the rest;
   - update one mod or all of them, remove a mod;
   - **Open mods folder** and **Restart game** buttons.
 - **Tiles with preview images** on the *Available* tab, like tldmods.net (switch to a plain list with *VIEW*); *Installed* and *Updates* stay lists. Previews are cached in `UserData/ModManager/img`. PNG and JPEG are shown; mods whose only image is WebP or GIF show their name instead.
-- **Main-menu banner.** Shows whether auto-update is on, what was updated at launch and how many updates are waiting. Click it to open the manager.
 - **Ask on first run.** The first time the game starts with the plugin you are asked whether to update mods at launch; if you say yes, updating starts from the next launch. You can flip it any time with the *UPDATE ON LAUNCH* button in the manager.
 - If a mod file is locked by the running game, the change is applied on the next launch (`UserData/ModManager/pending`).
 - The plugin lists itself as an installed mod and cannot remove itself. **Check manager update** looks at this repository's latest GitHub release and downloads a newer `ModManager.dll`; press *Restart game* afterwards and the new version is swapped in.

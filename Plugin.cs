@@ -47,6 +47,7 @@ public sealed class Plugin : MelonPlugin
         {
             HarmonyInstance.CreateClassProcessor(typeof(MenuPatch.Init)).Patch();
             HarmonyInstance.CreateClassProcessor(typeof(MenuPatch.Click)).Patch();
+            HarmonyInstance.CreateClassProcessor(typeof(MenuPatch.Text)).Patch();
         }
         catch (Exception e) { Log.Error("Could not add the main-menu button (F8 still works): " + e); }
     }

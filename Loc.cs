@@ -13,7 +13,7 @@ static class L
     {
         get
         {
-            if (Time.realtimeSinceStartup - _checked < 1f) return _ru;
+            if (Time.realtimeSinceStartup - _checked < 0.25f) return _ru;
             _checked = Time.realtimeSinceStartup;
             try { var l = Localization.Language ?? ""; _ru = l.StartsWith("Russian", StringComparison.OrdinalIgnoreCase) || l.Equals("ru", StringComparison.OrdinalIgnoreCase); }
             catch { _ru = false; }
@@ -26,7 +26,9 @@ static class L
     static readonly Dictionary<string, string> Ru = new()
     {
         ["MOD MANAGER"] = "МЕНЕДЖЕР МОДОВ",
-        ["Mods"] = "Моды",
+        ["Mod Manager"] = "Мод Менеджер",
+        ["In-game mod manager: download and update mods from https://tldmods.net/"] =
+            "Менеджер модов в игре: скачивание и обновление модов с источника https://tldmods.net/",
         ["UPDATE ON LAUNCH:  "] = "ОБНОВЛЯТЬ ПРИ ЗАПУСКЕ:  ",
         ["YES"] = "ДА",
         ["NO"] = "НЕТ",
@@ -86,8 +88,8 @@ static class L
         ["All mods are up to date"] = "Все моды актуальны",
         ["Click to open  (F8)"] = "Нажмите, чтобы открыть  (F8)",
         ["AUTO-UPDATE MODS"] = "АВТООБНОВЛЕНИЕ МОДОВ",
-        ["Check tldmods.net and update your installed mods every time the game starts?\n\nUpdating starts from the next launch. You can change this any time in the mod manager (Mods in the main menu, or F8)."] =
-            "Проверять tldmods.net и обновлять установленные моды при каждом запуске игры?\n\nОбновление начнётся со следующего запуска. Изменить выбор можно в менеджере модов (кнопка «Моды» в главном меню или F8).",
+        ["Check tldmods.net and update your installed mods every time the game starts?\n\nUpdating starts from the next launch. You can change this any time in the mod manager (Mod Manager in the main menu, or F8)."] =
+            "Проверять tldmods.net и обновлять установленные моды при каждом запуске игры?\n\nОбновление начнётся со следующего запуска. Изменить выбор можно в менеджере модов (кнопка «Мод Менеджер» в главном меню или F8).",
         ["YES, UPDATE"] = "ДА, ОБНОВЛЯТЬ",
     };
 }
