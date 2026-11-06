@@ -11,7 +11,7 @@ namespace ModManager;
 public sealed class Plugin : MelonPlugin
 {
     internal static Core Core = null!;
-    internal static MelonPreferences_Entry<bool> AutoUpdate = null!, Asked = null!;
+    internal static MelonPreferences_Entry<bool> AutoUpdate = null!, Asked = null!, TileView = null!;
     internal static MelonLogger.Instance Log = null!;
 
     internal static void SetAutoUpdate(bool on)
@@ -27,6 +27,7 @@ public sealed class Plugin : MelonPlugin
         var cat = MelonPreferences.CreateCategory("ModManager");
         AutoUpdate = cat.CreateEntry("AutoUpdate", false, description: "Update installed mods from tldmods.net at game start");
         Asked = cat.CreateEntry("AskedAutoUpdate", false, description: "The first-run question about auto-update was answered");
+        TileView = cat.CreateEntry("TileView", true, description: "Show the Available tab as tiles with preview images (false = list)");
         Core = new Core(MelonEnvironment.GameRootDirectory, s => Log.Msg(s));
         try
         {
@@ -44,8 +45,8 @@ public sealed class Plugin : MelonPlugin
     {
         try
         {
-            HarmonyInstance.CreateClassProcessor(typeof(MenuPatch.Configure)).Patch();
-            HarmonyInstance.CreateClassProcessor(typeof(MenuPatch.Add)).Patch();
+            HarmonyInstance.CreateClassProcessor(typeof(MenuPatch.Init)).Patch();
+            HarmonyInstance.CreateClassProcessor(typeof(MenuPatch.Click)).Patch();
         }
         catch (Exception e) { Log.Error("Could not add the main-menu button (F8 still works): " + e); }
     }

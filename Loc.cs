@@ -34,6 +34,8 @@ static class L
         ["AVAILABLE"] = "ДОСТУПНЫЕ",
         ["UPDATES"] = "ОБНОВЛЕНИЯ",
         ["SEARCH"] = "ПОИСК",
+        ["VIEW: TILES"] = "ВИД: ПЛИТКИ",
+        ["VIEW: LIST"] = "ВИД: СПИСОК",
         ["Catalog not loaded - no network?"] = "Каталог не загружен — нет сети?",
         ["Nothing found"] = "Ничего не найдено",
         ["this plugin"] = "этот плагин",

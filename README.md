@@ -10,6 +10,7 @@ A MelonLoader plugin for **The Long Dark** that keeps your mods up to date and l
   - every dependency is marked present or missing, and **Download missing** fetches the rest;
   - update one mod or all of them, remove a mod;
   - **Open mods folder** and **Restart game** buttons.
+- **Tiles with preview images** on the *Available* tab, like tldmods.net (switch to a plain list with *VIEW*); *Installed* and *Updates* stay lists. Previews are cached in `UserData/ModManager/img`. PNG and JPEG are shown; mods whose only image is WebP or GIF show their name instead.
 - **Main-menu banner.** Shows whether auto-update is on, what was updated at launch and how many updates are waiting. Click it to open the manager.
 - **Ask on first run.** The first time the game starts with the plugin you are asked whether to update mods at launch; if you say yes, updating starts from the next launch. You can flip it any time with the *UPDATE ON LAUNCH* button in the manager.
 - If a mod file is locked by the running game, the change is applied on the next launch (`UserData/ModManager/pending`).

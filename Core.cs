@@ -9,7 +9,10 @@ public sealed class ModEntry
 {
     public string Name = "", Title = "", Type = "mod", Author = "", Description = "", Version = "", ModUrl = "";
     public string[] Aliases = Array.Empty<string>(), Dependencies = Array.Empty<string>(),
-        Downloads = Array.Empty<string>(), Categories = Array.Empty<string>();
+        Downloads = Array.Empty<string>(), Categories = Array.Empty<string>(), Images = Array.Empty<string>();
+
+    /// <summary>First preview image Unity can decode (PNG/JPEG; the site also lists WebP/GIF, which we skip), or null.</summary>
+    public string Banner => Images.FirstOrDefault(u => Core.Decodable(u));
     public bool Error, AutoUpdate;
 
     /// <summary>Downloads we can place ourselves (.dll / .modcomponent / .zip), one per file name.</summary>
@@ -104,7 +107,7 @@ public sealed class Core
                 {
                     Name = Str(e, "Name"), Type = Str(e, "Type"), Author = Str(e, "Author"), Version = Str(e, "Version"),
                     ModUrl = Str(e, "ModUrl"), Aliases = Arr(e, "Aliases"), Dependencies = Arr(e, "Dependencies"),
-                    Categories = Arr(e, "Categories"), Downloads = Arr(e, "Downloads"),
+                    Categories = Arr(e, "Categories"), Downloads = Arr(e, "Downloads"), Images = Arr(e, "Images"),
                     Error = Bool(e, "Error"), AutoUpdate = Bool(e, "AutoUpdate"),
                     Description = Regex.Replace(Regex.Replace(Str(e, "Description"), "<br\\s*/?>", "\n", RegexOptions.IgnoreCase), "<[^>]+>", ""),
                 };
@@ -273,6 +276,34 @@ public sealed class Core
             foreach (var f in old.Files.Where(f => !written.Contains(f))) Delete(f);
         lock (_lock) { _manifest[e.Name] = e.Version; SaveManifest(); }
         Scan(); // so the next Resolve sees this mod as installed
+    }
+
+    // ---------------- preview images ----------------
+
+    public static bool Decodable(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp) return false;
+        var ext = Path.GetExtension(u.AbsolutePath).ToLowerInvariant();
+        return ext is ".png" or ".jpg" or ".jpeg" or ".php" or ""; // .php / extensionless are checked by magic bytes after download
+    }
+
+    /// <summary>Image bytes from the disk cache or the network; null when it is not a PNG/JPEG or is too big. Called off the main thread.</summary>
+    public byte[] FetchImage(string url)
+    {
+        var dir = Path.Combine(DataDir, "img");
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(url))) + ".img");
+        byte[] bytes;
+        if (File.Exists(file)) bytes = File.ReadAllBytes(file);
+        else
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            bytes = Http.GetByteArrayAsync(url, cts.Token).GetAwaiter().GetResult();
+            if (bytes.Length > 6_000_000) bytes = Array.Empty<byte>(); // huge screenshots would cost more memory than they are worth
+            File.WriteAllBytes(file, bytes);
+        }
+        bool png = bytes.Length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50, jpg = bytes.Length > 8 && bytes[0] == 0xFF && bytes[1] == 0xD8;
+        return png || jpg ? bytes : null;
     }
 
     // ---------------- self update (GitHub releases) ----------------

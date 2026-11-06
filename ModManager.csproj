@@ -22,6 +22,7 @@
     <Reference Include="UnityEngine.CoreModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll" />
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.IMGUIModule.dll" />
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.InputLegacyModule.dll" />
+    <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.ImageConversionModule.dll" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.TextRenderingModule.dll" />
   </ItemGroup>
 

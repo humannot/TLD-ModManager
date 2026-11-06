@@ -24,7 +24,7 @@ static class ManagerUI
     static int _rowsTab = -1, _updates;
     static string _rowsSearch = "";
 
-    static GUIStyle _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
+    static GUIStyle _thumbText, _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
 
     // ---------------- input ----------------
 
@@ -34,27 +34,24 @@ static class ManagerUI
         if (Input.GetKeyDown(KeyCode.F8) && Plugin.Asked.Value) Toggle();
         if (_open || !Plugin.Asked.Value) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
         MenuDiagnostic();
+        if (_open) Img.Pump();
     }
 
+    // Every 2 s in the main menu: make sure the Mods item is there (the menu may have been built before our patch, or rebuilt since).
     static float _nextDiag; static int _diagCount;
     static void MenuDiagnostic()
     {
-        if (_diagCount >= 2 || Time.realtimeSinceStartup < _nextDiag || !InMainMenu) return;
-        _nextDiag = Time.realtimeSinceStartup + 5f;
+        if (Time.realtimeSinceStartup < _nextDiag || !InMainMenu) return;
+        _nextDiag = Time.realtimeSinceStartup + 2f;
         try
         {
             var panel = InterfaceManager.GetPanel<Panel_MainMenu>();
             if (panel == null || panel.m_BasicMenu == null || panel.m_BasicMenu.m_ItemModelList == null || panel.m_BasicMenu.m_ItemModelList.Count == 0) return;
-            _diagCount++;
-            MenuPatch.Dump(panel);
-            if (_diagCount == 1 && !panel.m_BasicMenu.m_ItemModelList.ToArray().Any(m => m.m_Id == MenuPatch.Label))
-            {
-                // the menu was built before our patch was in place: let the game rebuild it, which now goes through the patch
-                Plugin.Log.Msg("[menu] Mods item missing, asking the game to rebuild the main menu");
-                panel.ConfigureMenu();
-            }
+            int before = MenuPatch.Added;
+            MenuPatch.Ensure(panel);
+            if (_diagCount < 3 && (_diagCount == 0 || MenuPatch.Added != before)) { _diagCount++; MenuPatch.Dump(panel); }
         }
-        catch (Exception e) { _diagCount++; Plugin.Log.Warning("[menu] dump failed: " + e.Message); }
+        catch (Exception e) { _nextDiag += 30f; Plugin.Log.Warning("[menu] ensure failed: " + e.Message); }
     }
 
     /// <summary>Called by the main-menu "Mods" item.</summary>
@@ -83,7 +80,8 @@ static class ManagerUI
     static bool Btn(Rect r, string text, GUIStyle s) => GUI.Button(r, L.T(text), s);
     static void Lbl(Rect r, string text, GUIStyle s) => GUI.Label(r, L.T(text), s);
 
-    static bool InMainMenu => UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenu";
+    // the scene's name is not "MainMenu" in every edition, so ask the game
+    static bool InMainMenu { get { try { return GameManager.IsMainMenuActive(); } catch { return false; } } }
 
     // ---------------- drawing ----------------
 
@@ -129,6 +127,12 @@ static class ManagerUI
         string[] tabs = { L.T("INSTALLED") + $" ({core.Installed.Count})", L.T("AVAILABLE") + $" ({core.Catalog.Count(e => !core.Installed.ContainsKey(e.Name))})", L.T("UPDATES") + $" ({_updates})" };
         for (int i = 0; i < tabs.Length; i++)
             if (Btn(new Rect(x + i * 202, y, 196, 34), tabs[i], _tab == i ? _btnOn : _btn)) { _tab = i; _listScroll = Vector2.zero; }
+        if (_tab == 1 && Btn(new Rect(x + 3 * 202, y, 150, 34), Plugin.TileView.Value ? "VIEW: TILES" : "VIEW: LIST", _btn))
+        {
+            Plugin.TileView.Value = !Plugin.TileView.Value;
+            MelonLoader.MelonPreferences.Save();
+            _listScroll = Vector2.zero;
+        }
         Lbl(new Rect(r.xMax - 392, y + 6, 70, 24), "SEARCH", _muted);
         SearchField(new Rect(r.xMax - 322, y, 300, 34));
         y += 48;
@@ -201,11 +205,55 @@ static class ManagerUI
             Lbl(new Rect(area.x + 16, area.y + 16, area.width - 32, 30), Plugin.Core.Catalog.Count == 0 ? "Catalog not loaded - no network?" : "Nothing found", _muted);
             return;
         }
+        if (_tab == 1 && Plugin.TileView.Value) { DrawTiles(area); return; }
         var view = new Rect(0, 0, area.width - 22, _rows.Count * rh);
         _listScroll = GUI.BeginScrollView(area, _listScroll, view);
         int first = Mathf.Max(0, (int)(_listScroll.y / rh)), last = Mathf.Min(_rows.Count, first + (int)(area.height / rh) + 2);
         for (int i = first; i < last; i++) DrawRow(_rows[i], new Rect(0, i * rh, view.width, rh - 3));
         GUI.EndScrollView();
+    }
+
+    // Tiles like tldmods.net: preview image on top, name, author and the install button below. Only the "Available" tab uses them.
+    static void DrawTiles(Rect area)
+    {
+        const int cols = 3; const float gap = 8, footer = 74;
+        float tw = (area.width - 22 - gap * (cols - 1) - 8) / cols, ih = Mathf.Floor(tw * 9f / 16f), th = ih + footer;
+        int rowsN = (_rows.Count + cols - 1) / cols;
+        var view = new Rect(0, 0, area.width - 22, 4 + rowsN * (th + gap));
+        _listScroll = GUI.BeginScrollView(area, _listScroll, view);
+        int first = Mathf.Max(0, (int)(_listScroll.y / (th + gap))), last = Mathf.Min(rowsN, first + (int)(area.height / (th + gap)) + 2);
+        for (int ri = first; ri < last; ri++)
+            for (int c = 0; c < cols && ri * cols + c < _rows.Count; c++)
+                DrawTile(_rows[ri * cols + c], new Rect(4 + c * (tw + gap), 4 + ri * (th + gap), tw, th), ih);
+        GUI.EndScrollView();
+    }
+
+    static void DrawTile(Row row, Rect r, float imgH)
+    {
+        var e = row.E;
+        GUI.Box(r, "", row.Key == _sel ? _rowSel : _row);
+        DrawBanner(e, new Rect(r.x, r.y, r.width, imgH));
+        Lbl(new Rect(r.x + 8, r.y + imgH + 4, r.width - 16, 22), e.Title, _h2);
+        Lbl(new Rect(r.x + 8, r.y + imgH + 24, r.width - 16, 18), e.Author, _muted);
+        var btn = new Rect(r.x + 8, r.yMax - 32, r.width - 16, 26);
+        if (e.CanInstall) { if (Btn(btn, "INSTALL", _btn)) InstallWithDeps(e); }
+        else Lbl(btn, "MANUAL", _warn);
+        if (GUI.Button(new Rect(r.x, r.y, r.width, r.height - 36), "", _none)) { _sel = row.Key; _descScroll = Vector2.zero; }
+    }
+
+    static bool _noDrawTexture;
+
+    /// <summary>Preview image cropped to the rect, or the mod's name on a dark panel while loading / when it has none.</summary>
+    static void DrawBanner(ModEntry e, Rect r)
+    {
+        var tex = Img.Get(e.Banner);
+        if (tex != null && !_noDrawTexture)
+        {
+            try { GUI.DrawTexture(r, tex, ScaleMode.ScaleAndCrop); return; }
+            catch (Exception ex) { _noDrawTexture = true; Plugin.Log.Warning("GUI.DrawTexture unavailable, using placeholders: " + ex.Message); }
+        }
+        GUI.Box(r, "", _panel);
+        GUI.Label(new Rect(r.x + 8, r.y + 4, r.width - 16, r.height - 8), e.Title, _thumbText);
     }
 
     static void DrawRow(Row row, Rect r)
@@ -244,6 +292,7 @@ static class ManagerUI
 
         float x = area.x + 16, y = area.y + 14, w = area.width - 32;
         Lbl(new Rect(x, y, w, 32), e != null ? e.Title : _sel, _title); y += 38;
+        if (e != null && e.Banner != null) { DrawBanner(e, new Rect(x, y, w, 130)); y += 138; }
         if (e != null)
         {
             Lbl(new Rect(x, y, w, 22), L.T("Author: ") + e.Author, _text); y += 24;
@@ -285,6 +334,7 @@ static class ManagerUI
         // description
         var desc = e != null ? e.Description : inst.IsSelf ? "This is Mod Manager itself: it updates your other mods and installs new ones from tldmods.net." : "Files: " + string.Join(", ", inst.Files);
         var descArea = new Rect(x, y, w, area.yMax - y - 12);
+        if (descArea.height < 24) return; // the banner and a long dependency list used the space
         float th = _wrap.CalcHeight(new GUIContent(desc), w - 22);
         _descScroll = GUI.BeginScrollView(descArea, _descScroll, new Rect(0, 0, w - 22, th));
         Lbl(new Rect(0, 0, w - 22, th), desc, _wrap);
@@ -417,6 +467,7 @@ static class ManagerUI
         _bad = Label(new Color(0.88f, 0.42f, 0.36f), 15, FontStyle.Bold);
         _warn = Label(new Color(0.93f, 0.72f, 0.38f), 14, FontStyle.Bold);
         _wrap = Label(Cream, 15); _wrap.wordWrap = true; _wrap.alignment = TextAnchor.UpperLeft;
+        _thumbText = Label(Muted, 16, FontStyle.Bold); _thumbText.wordWrap = true; _thumbText.alignment = TextAnchor.MiddleCenter;
         _none = new GUIStyle();
         _ok.alignment = _warn.alignment = TextAnchor.MiddleCenter;
     }
