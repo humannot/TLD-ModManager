@@ -23,6 +23,7 @@ public sealed class ModEntry
 public sealed class InstalledMod
 {
     public string Key = "", Version = "";
+    public bool IsSelf; // this plugin: always listed as installed, never removed or replaced from the list
     public ModEntry Entry;
     public readonly List<string> Files = new(); // paths relative to game root
 }
@@ -38,6 +39,8 @@ public sealed class Core
     readonly Action<string> _log;
 
     public List<ModEntry> Catalog { get; private set; } = new();
+    /// <summary>Titles updated by this session's UpdateAll (shown in the main-menu banner).</summary>
+    public readonly List<string> Updated = new();
     Dictionary<string, ModEntry> _index = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, InstalledMod> Installed { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> _manifest; // catalog name -> version we installed
@@ -73,7 +76,7 @@ public sealed class Core
         }
         catch (Exception e)
         {
-            _log("tldmods.net недоступен (" + e.Message + "), использую кэш");
+            _log("tldmods.net is unreachable (" + e.Message + "), using the cached list");
             if (!File.Exists(_cachePath)) return false;
             json = File.ReadAllText(_cachePath); online = false;
         }
@@ -147,8 +150,12 @@ public sealed class Core
                 if (ext == ".dll")
                 {
                     var (melonName, melonVersion) = ReadMelonInfo(path);
-                    if (melonName == "ModManager") continue; // ourselves
                     version = melonVersion;
+                    if (melonName == "ModManager")
+                    {
+                        found["ModManager"] = new InstalledMod { Key = "ModManager", Version = version, IsSelf = true, Files = { Path.GetRelativePath(Root, path) } };
+                        continue;
+                    }
                     if (melonName.Length > 0) entry = Find(melonName);
                 }
                 entry ??= Find(stem);
@@ -222,20 +229,20 @@ public sealed class Core
     {
         var unknown = new List<string>();
         foreach (var e in Resolve(name, unknown)) Install(e);
-        if (unknown.Count > 0) _log("Нет в каталоге tldmods.net: " + string.Join(", ", unknown));
+        if (unknown.Count > 0) _log("Not in the tldmods.net catalog: " + string.Join(", ", unknown));
     }
 
     public void InstallMissingDependencies(string name)
     {
         var unknown = new List<string>();
         foreach (var e in Resolve(name, unknown, includeSelf: false)) Install(e);
-        if (unknown.Count > 0) _log("Нет в каталоге tldmods.net: " + string.Join(", ", unknown));
+        if (unknown.Count > 0) _log("Not in the tldmods.net catalog: " + string.Join(", ", unknown));
     }
 
     public void Install(ModEntry e)
     {
-        if (!e.CanInstall) throw new InvalidOperationException(e.Title + ": нет файла для автоустановки, откройте страницу мода");
-        _log($"Установка {e.Title} {e.Version}");
+        if (!e.CanInstall) throw new InvalidOperationException(e.Title + ": no file we can install automatically, open the mod page instead");
+        _log($"Installing {e.Title} {e.Version}");
         var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var targetDir = e.Type.Equals("plugin", StringComparison.OrdinalIgnoreCase) ? "Plugins" : "Mods";
         foreach (var url in e.Files)
@@ -270,7 +277,8 @@ public sealed class Core
 
     public void Uninstall(InstalledMod m)
     {
-        _log("Удаление " + m.Key);
+        if (m.IsSelf) throw new InvalidOperationException("Mod Manager cannot uninstall itself");
+        _log("Removing " + m.Key);
         foreach (var f in m.Files) Delete(f);
         lock (_lock) { _manifest.Remove(m.Key); SaveManifest(); }
     }
@@ -282,7 +290,7 @@ public sealed class Core
         var first = p.Split('/')[0];
         var rooted = new[] { "Mods", "Plugins", "UserLibs", "UserData" }.Contains(first, StringComparer.OrdinalIgnoreCase);
         var rel = Path.Combine((rooted ? p : defaultDir + "/" + p).Split('/'));
-        if (rel.Split(Path.DirectorySeparatorChar).Contains("..")) throw new InvalidDataException("Недопустимый путь в архиве: " + entryPath);
+        if (rel.Split(Path.DirectorySeparatorChar).Contains("..")) throw new InvalidDataException("Illegal path in archive: " + entryPath);
         return rel;
     }
 
@@ -293,8 +301,8 @@ public sealed class Core
         {
             // unknown local version (e.g. a hand-copied .modcomponent): offer it in the UI, never replace silently
             if (onlyAutoUpdate && (!m.Entry!.AutoUpdate || m.Version.Length == 0)) continue;
-            try { _log($"Обновление {m.Entry!.Title}: {m.Version} -> {m.Entry.Version}"); Install(m.Entry); n++; }
-            catch (Exception ex) { _log($"Не удалось обновить {m.Key}: {ex.Message}"); }
+            try { _log($"Updating {m.Entry!.Title}: {m.Version} -> {m.Entry.Version}"); Install(m.Entry); Updated.Add(m.Entry.Title); n++; }
+            catch (Exception ex) { _log($"Could not update {m.Key}: {ex.Message}"); }
         }
         if (n > 0) Scan();
         return n;
@@ -350,7 +358,7 @@ public sealed class Core
                 }
                 File.Delete(p); n++;
             }
-            catch (Exception ex) { _log("Не удалось применить " + p + ": " + ex.Message); }
+            catch (Exception ex) { _log("Could not apply " + p + ": " + ex.Message); }
         }
         return n;
     }
