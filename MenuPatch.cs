@@ -16,7 +16,6 @@ static class MenuPatch
     const string LabelKey = "ModManager_Mods";
     const string DescKey = "GAMEPLAY_Description77"; // "GAMEPLAY_Description" + the item type, which the menu asks for on hover
     internal static readonly string ItemId = ItemType.ToString();
-    internal static int InitCalls, Added;
     static string _applied = ""; // the label text currently shown, so a language change can find and replace it
 
     static Panel_MainMenu.MainMenuItem.MainMenuItemType Type => (Panel_MainMenu.MainMenuItem.MainMenuItemType)ItemType;
@@ -58,7 +57,6 @@ static class MenuPatch
         var open = (Il2CppSystem.Action)new System.Action(ManagerUI.OpenFromMenu);
         bm.AddItem(ItemId, ItemType, q, text, desc, "", open, like.m_NormalTint, like.m_HighlightTint);
         _applied = text;
-        Added++;
     }
 
     /// <summary>The language changed while the menu was open: update the model and the label the player already sees.</summary>
@@ -77,22 +75,11 @@ static class MenuPatch
         _applied = text;
     }
 
-    /// <summary>One-off dump of what the main menu looks like, for diagnosing the button.</summary>
-    internal static void Dump(Panel_MainMenu panel)
-    {
-        var log = Plugin.Log;
-        log.Msg($"[menu] Initialize hits: {InitCalls}, items added: {Added}");
-        var models = panel.m_BasicMenu?.m_ItemModelList;
-        log.Msg($"[menu] BasicMenu models: {(models == null ? "null" : models.Count.ToString())}, views: {panel.m_BasicMenu?.m_MenuItems?.Count}");
-        for (int i = 0; models != null && i < models.Count; i++) log.Msg($"[menu]   model {i}: id={models[i].m_Id} idx={models[i].m_ItemIndex} text={models[i].m_LabelText} desc={models[i].m_DescriptionText}");
-    }
-
     [HarmonyPatch(typeof(Panel_MainMenu), nameof(Panel_MainMenu.Initialize))]
     internal static class Init
     {
         static void Postfix(Panel_MainMenu __instance)
         {
-            InitCalls++;
             try { Ensure(__instance); } catch (Exception e) { Plugin.Log.Error("Could not add the Mod Manager menu item: " + e); }
         }
     }

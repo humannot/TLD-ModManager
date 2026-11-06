@@ -39,7 +39,7 @@ static class ManagerUI
 
     // Twice a second in the main menu: make sure the Mod Manager item is there and in the current language
     // (the menu may have been built before our patch, rebuilt since, or the language may have changed).
-    static float _nextDiag; static int _diagCount;
+    static float _nextDiag;
     static void MenuDiagnostic()
     {
         if (Time.realtimeSinceStartup < _nextDiag || !InMainMenu) return;
@@ -48,9 +48,7 @@ static class ManagerUI
         {
             var panel = InterfaceManager.GetPanel<Panel_MainMenu>();
             if (panel == null || panel.m_BasicMenu == null || panel.m_BasicMenu.m_ItemModelList == null || panel.m_BasicMenu.m_ItemModelList.Count == 0) return;
-            int before = MenuPatch.Added;
             MenuPatch.Ensure(panel);
-            if (_diagCount < 3 && (_diagCount == 0 || MenuPatch.Added != before)) { _diagCount++; MenuPatch.Dump(panel); }
         }
         catch (Exception e) { _nextDiag += 30f; Plugin.Log.Warning("[menu] ensure failed: " + e.Message); }
     }
