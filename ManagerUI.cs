@@ -33,6 +33,28 @@ static class ManagerUI
         if (Plugin.Core == null) return;
         if (Input.GetKeyDown(KeyCode.F8) && Plugin.Asked.Value) Toggle();
         if (_open || !Plugin.Asked.Value) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
+        MenuDiagnostic();
+    }
+
+    static float _nextDiag; static int _diagCount;
+    static void MenuDiagnostic()
+    {
+        if (_diagCount >= 2 || Time.realtimeSinceStartup < _nextDiag || !InMainMenu) return;
+        _nextDiag = Time.realtimeSinceStartup + 5f;
+        try
+        {
+            var panel = InterfaceManager.GetPanel<Panel_MainMenu>();
+            if (panel == null || panel.m_BasicMenu == null || panel.m_BasicMenu.m_ItemModelList == null || panel.m_BasicMenu.m_ItemModelList.Count == 0) return;
+            _diagCount++;
+            MenuPatch.Dump(panel);
+            if (_diagCount == 1 && !panel.m_BasicMenu.m_ItemModelList.ToArray().Any(m => m.m_Id == MenuPatch.Label))
+            {
+                // the menu was built before our patch was in place: let the game rebuild it, which now goes through the patch
+                Plugin.Log.Msg("[menu] Mods item missing, asking the game to rebuild the main menu");
+                panel.ConfigureMenu();
+            }
+        }
+        catch (Exception e) { _diagCount++; Plugin.Log.Warning("[menu] dump failed: " + e.Message); }
     }
 
     /// <summary>Called by the main-menu "Mods" item.</summary>
@@ -57,6 +79,9 @@ static class ManagerUI
         try { foreach (var c in UnityEngine.Object.FindObjectsByType<UICamera>(FindObjectsSortMode.None)) c.enabled = on; }
         catch (Exception e) { Plugin.Log.Warning("UICamera: " + e.Message); }
     }
+
+    static bool Btn(Rect r, string text, GUIStyle s) => GUI.Button(r, L.T(text), s);
+    static void Lbl(Rect r, string text, GUIStyle s) => GUI.Label(r, L.T(text), s);
 
     static bool InMainMenu => UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenu";
 
@@ -92,19 +117,19 @@ static class ManagerUI
         GUI.Box(r, "", _bg);
 
         float x = r.x + 22, y = r.y + 18;
-        GUI.Label(new Rect(x, y, 360, 36), "MOD MANAGER", _title);
-        GUI.Label(new Rect(x + 230, y + 8, 200, 24), "tldmods.net", _muted);
+        Lbl(new Rect(x, y, 300, 36), "MOD MANAGER", _title);
         bool auto = Plugin.AutoUpdate.Value;
-        if (GUI.Button(new Rect(r.xMax - 64 - 350, y, 340, 36), "UPDATE ON LAUNCH:  " + (auto ? "YES" : "NO"), auto ? _btnOn : _btn))
+        if (Btn(new Rect(r.xMax - 64 - 350, y, 340, 36), L.T("UPDATE ON LAUNCH:  ") + L.T(auto ? "YES" : "NO"), auto ? _btnOn : _btn))
             Plugin.SetAutoUpdate(!auto);
-        if (GUI.Button(new Rect(r.xMax - 64, y, 42, 36), "X", _btn)) Toggle();
+        if (Btn(new Rect(r.xMax - 64 - 350 - 290, y, 280, 36), "CHECK MANAGER UPDATE", _btn)) CheckSelfUpdate();
+        if (Btn(new Rect(r.xMax - 64, y, 42, 36), "X", _btn)) Toggle();
         y += 52;
 
         var core = Plugin.Core;
-        string[] tabs = { $"INSTALLED ({core.Installed.Count})", $"AVAILABLE ({core.Catalog.Count(e => !core.Installed.ContainsKey(e.Name))})", $"UPDATES ({_updates})" };
+        string[] tabs = { L.T("INSTALLED") + $" ({core.Installed.Count})", L.T("AVAILABLE") + $" ({core.Catalog.Count(e => !core.Installed.ContainsKey(e.Name))})", L.T("UPDATES") + $" ({_updates})" };
         for (int i = 0; i < tabs.Length; i++)
-            if (GUI.Button(new Rect(x + i * 202, y, 196, 34), tabs[i], _tab == i ? _btnOn : _btn)) { _tab = i; _listScroll = Vector2.zero; }
-        GUI.Label(new Rect(r.xMax - 392, y + 6, 70, 24), "SEARCH", _muted);
+            if (Btn(new Rect(x + i * 202, y, 196, 34), tabs[i], _tab == i ? _btnOn : _btn)) { _tab = i; _listScroll = Vector2.zero; }
+        Lbl(new Rect(r.xMax - 392, y + 6, 70, 24), "SEARCH", _muted);
         SearchField(new Rect(r.xMax - 322, y, 300, 34));
         y += 48;
 
@@ -121,7 +146,7 @@ static class ManagerUI
         if (e.type == EventType.MouseDown) _searchFocus = r.Contains(e.mousePosition);
         GUI.Box(r, "", _field);
         bool caret = _searchFocus && (int)(Time.realtimeSinceStartup * 2) % 2 == 0;
-        GUI.Label(new Rect(r.x + 8, r.y, r.width - 16, r.height), _search + (caret ? "|" : ""), _text);
+        Lbl(new Rect(r.x + 8, r.y, r.width - 16, r.height), _search + (caret ? "|" : ""), _text);
         if (!_searchFocus || e.type != EventType.KeyDown) return;
         if (e.keyCode == KeyCode.Backspace) { if (_search.Length > 0) _search = _search.Substring(0, _search.Length - 1); e.Use(); }
         else if (e.keyCode == KeyCode.Escape || e.keyCode == KeyCode.Return) { _searchFocus = false; e.Use(); }
@@ -132,15 +157,15 @@ static class ManagerUI
     {
         var core = Plugin.Core;
         bool auto = Plugin.AutoUpdate.Value;
-        string line2 = core.Updated.Count > 0 ? "Updated at launch: " + Shorten(string.Join(", ", core.Updated), 46)
-            : _updates > 0 ? $"{_updates} update{(_updates == 1 ? "" : "s")} available"
-            : "All mods are up to date";
+        string line2 = core.Updated.Count > 0 ? L.T("Updated at launch: ") + Shorten(string.Join(", ", core.Updated), 46)
+            : _updates > 0 ? _updates + L.T(_updates == 1 ? " update available" : " updates available")
+            : L.T("All mods are up to date");
         var r = new Rect(24, Screen.height - 112, 400, 78);
         GUI.Box(r, "", _panel);
-        GUI.Label(new Rect(r.x + 14, r.y + 6, r.width - 28, 24), "MOD MANAGER   " + (auto ? "AUTO-UPDATE: ON" : "AUTO-UPDATE: OFF"), auto ? _ok : _h2);
-        GUI.Label(new Rect(r.x + 14, r.y + 30, r.width - 28, 22), line2, _text);
-        GUI.Label(new Rect(r.x + 14, r.y + 52, r.width - 28, 20), "Click to open  (F8)", _muted);
-        if (GUI.Button(r, "", _none)) OpenFromMenu();
+        Lbl(new Rect(r.x + 14, r.y + 6, r.width - 28, 24), auto ? "MOD MANAGER   AUTO-UPDATE: ON" : "MOD MANAGER   AUTO-UPDATE: OFF", auto ? _ok : _h2);
+        Lbl(new Rect(r.x + 14, r.y + 30, r.width - 28, 22), line2, _text);
+        Lbl(new Rect(r.x + 14, r.y + 52, r.width - 28, 20), "Click to open  (F8)", _muted);
+        if (Btn(r, "", _none)) OpenFromMenu();
     }
 
     static string Shorten(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 3) + "...";
@@ -152,14 +177,14 @@ static class ManagerUI
         float w = Mathf.Min(620, Screen.width - 40), h = 270;
         var r = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
         GUI.Box(r, "", _bg);
-        GUI.Label(new Rect(r.x + 24, r.y + 20, w - 48, 34), "AUTO-UPDATE MODS", _title);
-        GUI.Label(new Rect(r.x + 24, r.y + 66, w - 48, 120),
+        Lbl(new Rect(r.x + 24, r.y + 20, w - 48, 34), "AUTO-UPDATE MODS", _title);
+        Lbl(new Rect(r.x + 24, r.y + 66, w - 48, 120),
             "Check tldmods.net and update your installed mods every time the game starts?\n\n" +
             "Updating starts from the next launch. You can change this any time in the mod manager (Mods in the main menu, or F8).", _wrap);
         float bw = (w - 48 - 16) / 2, by = r.yMax - 64;
         bool? answer = null;
-        if (GUI.Button(new Rect(r.x + 24, by, bw, 42), "YES, UPDATE", _btnOn)) answer = true;
-        if (GUI.Button(new Rect(r.x + 24 + bw + 16, by, bw, 42), "NO", _btn)) answer = false;
+        if (Btn(new Rect(r.x + 24, by, bw, 42), "YES, UPDATE", _btnOn)) answer = true;
+        if (Btn(new Rect(r.x + 24 + bw + 16, by, bw, 42), "NO", _btn)) answer = false;
         if (answer is bool on)
         {
             Plugin.SetAutoUpdate(on);
@@ -173,7 +198,7 @@ static class ManagerUI
         GUI.Box(area, "", _panel);
         if (_rows.Count == 0)
         {
-            GUI.Label(new Rect(area.x + 16, area.y + 16, area.width - 32, 30), Plugin.Core.Catalog.Count == 0 ? "Catalog not loaded - no network?" : "Nothing found", _muted);
+            Lbl(new Rect(area.x + 16, area.y + 16, area.width - 32, 30), Plugin.Core.Catalog.Count == 0 ? "Catalog not loaded - no network?" : "Nothing found", _muted);
             return;
         }
         var view = new Rect(0, 0, area.width - 22, _rows.Count * rh);
@@ -188,20 +213,20 @@ static class ManagerUI
         var core = Plugin.Core;
         GUI.Box(r, "", row.Key == _sel ? _rowSel : _row);
         var e = row.E;
-        GUI.Label(new Rect(r.x + 12, r.y + 4, r.width - 280, 24), e?.Title ?? row.Key, _h2);
-        GUI.Label(new Rect(r.x + 12, r.y + 26, r.width - 280, 20), e != null ? e.Author : row.I != null && row.I.IsSelf ? "this plugin" : "not in the tldmods.net catalog", _muted);
+        Lbl(new Rect(r.x + 12, r.y + 4, r.width - 280, 24), e?.Title ?? row.Key, _h2);
+        Lbl(new Rect(r.x + 12, r.y + 26, r.width - 280, 20), e != null ? e.Author : row.I != null && row.I.IsSelf ? "this plugin" : "not in the tldmods.net catalog", _muted);
 
         string ver = row.I != null && e != null && core.HasUpdate(row.I) ? $"{row.I.Version} -> {e.Version}" : row.I != null && row.I.Version.Length > 0 ? row.I.Version : e != null ? e.Version : "";
-        GUI.Label(new Rect(r.xMax - 268, r.y + 14, 120, 24), ver, e != null && e.Error ? _bad : _muted);
+        Lbl(new Rect(r.xMax - 268, r.y + 14, 120, 24), ver, e != null && e.Error ? _bad : _muted);
 
         // the action button is drawn before the row's click area so it gets the click first
         var btn = new Rect(r.xMax - 140, r.y + 8, 130, r.height - 16);
-        if (e != null && row.I == null && e.CanInstall) { if (GUI.Button(btn, "INSTALL", _btn)) InstallWithDeps(e); }
-        else if (row.I != null && core.HasUpdate(row.I)) { if (GUI.Button(btn, "UPDATE", _btnOn)) Run("Updating " + e.Title, () => core.Install(e)); }
-        else if (row.I != null) GUI.Label(btn, "INSTALLED", _ok);
-        else if (e != null) GUI.Label(btn, "MANUAL", _warn);
+        if (e != null && row.I == null && e.CanInstall) { if (Btn(btn, "INSTALL", _btn)) InstallWithDeps(e); }
+        else if (row.I != null && core.HasUpdate(row.I)) { if (Btn(btn, "UPDATE", _btnOn)) Run(L.T("Updating ") + e.Title, () => core.Install(e)); }
+        else if (row.I != null) Lbl(btn, "INSTALLED", _ok);
+        else if (e != null) Lbl(btn, "MANUAL", _warn);
 
-        if (GUI.Button(new Rect(r.x, r.y, r.width - 145, r.height), "", _none)) { _sel = row.Key; _descScroll = Vector2.zero; }
+        if (Btn(new Rect(r.x, r.y, r.width - 145, r.height), "", _none)) { _sel = row.Key; _descScroll = Vector2.zero; }
     }
 
     static void DrawDetails(Rect area)
@@ -213,34 +238,34 @@ static class ManagerUI
         core.Installed.TryGetValue(e != null ? e.Name : _sel, out inst);
         if (e == null && inst == null)
         {
-            GUI.Label(new Rect(area.x + 16, area.y + 16, area.width - 32, 60), "Select a mod from the list", _muted);
+            Lbl(new Rect(area.x + 16, area.y + 16, area.width - 32, 60), "Select a mod from the list", _muted);
             return;
         }
 
         float x = area.x + 16, y = area.y + 14, w = area.width - 32;
-        GUI.Label(new Rect(x, y, w, 32), e != null ? e.Title : _sel, _title); y += 38;
+        Lbl(new Rect(x, y, w, 32), e != null ? e.Title : _sel, _title); y += 38;
         if (e != null)
         {
-            GUI.Label(new Rect(x, y, w, 22), $"Author: {e.Author}", _text); y += 24;
-            if (e.Categories.Length > 0) { GUI.Label(new Rect(x, y, w, 22), string.Join(" / ", e.Categories), _muted); y += 24; }
+            Lbl(new Rect(x, y, w, 22), L.T("Author: ") + e.Author, _text); y += 24;
+            if (e.Categories.Length > 0) { Lbl(new Rect(x, y, w, 22), string.Join(" / ", e.Categories), _muted); y += 24; }
         }
         string catalogVer = e != null && e.Version.Length > 0 ? e.Version : "-";
-        string localVer = inst == null ? "no" : inst.Version.Length > 0 ? inst.Version : "?";
-        GUI.Label(new Rect(x, y, w, 22), $"Version: {catalogVer}   |   installed: {localVer}", _text); y += 26;
-        if (e != null && e.Error) { GUI.Label(new Rect(x, y, w, 22), "! Marked as broken on tldmods.net", _bad); y += 24; }
+        string localVer = inst == null ? L.T("no") : inst.Version.Length > 0 ? inst.Version : "?";
+        Lbl(new Rect(x, y, w, 22), L.T("Version: ") + catalogVer + "   |   " + L.T("installed: ") + localVer, _text); y += 26;
+        if (e != null && e.Error) { Lbl(new Rect(x, y, w, 22), "! Marked as broken on tldmods.net", _bad); y += 24; }
 
         // dependencies
         if (e != null && e.Dependencies.Length > 0)
         {
-            GUI.Label(new Rect(x, y, w, 22), "DEPENDENCIES", _h2); y += 26;
+            Lbl(new Rect(x, y, w, 22), "DEPENDENCIES", _h2); y += 26;
             foreach (var d in e.Dependencies)
             {
                 bool have = core.IsInstalled(d), known = core.Find(d) != null;
-                GUI.Label(new Rect(x + 8, y, w, 22), (have ? "[x]  " : "[ ]  ") + d + (known || have ? "" : "  (not in catalog)"), have ? _ok : _bad); y += 22;
+                Lbl(new Rect(x + 8, y, w, 22), (have ? "[x]  " : "[ ]  ") + d + (known || have ? "" : "  " + L.T("(not in catalog)")), have ? _ok : _bad); y += 22;
             }
             var missing = core.MissingDependencies(e).Count();
-            if (missing > 0 && GUI.Button(new Rect(x, y + 4, w, 34), $"DOWNLOAD MISSING ({missing})", _btnOn))
-                Run("Installing dependencies of " + e.Title, () => core.InstallMissingDependencies(e.Name));
+            if (missing > 0 && Btn(new Rect(x, y + 4, w, 34), L.T("DOWNLOAD MISSING") + $" ({missing})", _btnOn))
+                Run(L.T("Installing dependencies of ") + e.Title, () => core.InstallMissingDependencies(e.Name));
             y += missing > 0 ? 44 : 6;
         }
 
@@ -249,12 +274,12 @@ static class ManagerUI
         if (e != null && e.CanInstall)
         {
             var label = inst == null ? "INSTALL" : core.HasUpdate(inst) ? "UPDATE" : "REINSTALL";
-            if (GUI.Button(new Rect(x, y, bw, 36), label, inst == null || core.HasUpdate(inst) ? _btnOn : _btn)) InstallWithDeps(e);
+            if (Btn(new Rect(x, y, bw, 36), label, inst == null || core.HasUpdate(inst) ? _btnOn : _btn)) InstallWithDeps(e);
         }
-        else if (e != null && GUI.Button(new Rect(x, y, bw, 36), "MOD PAGE", _btn)) Open(e.ModUrl);
-        if (inst != null && !inst.IsSelf && GUI.Button(new Rect(x + bw + 10, y, bw, 36), "REMOVE", _btn))
-            Run("Removing " + inst.Key, () => core.Uninstall(inst));
-        else if (inst == null && e != null && e.CanInstall && e.ModUrl.Length > 0 && GUI.Button(new Rect(x + bw + 10, y, bw, 36), "MOD PAGE", _btn)) Open(e.ModUrl);
+        else if (e != null && Btn(new Rect(x, y, bw, 36), "MOD PAGE", _btn)) Open(e.ModUrl);
+        if (inst != null && !inst.IsSelf && Btn(new Rect(x + bw + 10, y, bw, 36), "REMOVE", _btn))
+            Run(L.T("Removing ") + inst.Key, () => core.Uninstall(inst));
+        else if (inst == null && e != null && e.CanInstall && e.ModUrl.Length > 0 && Btn(new Rect(x + bw + 10, y, bw, 36), "MOD PAGE", _btn)) Open(e.ModUrl);
         y += 46;
 
         // description
@@ -262,7 +287,7 @@ static class ManagerUI
         var descArea = new Rect(x, y, w, area.yMax - y - 12);
         float th = _wrap.CalcHeight(new GUIContent(desc), w - 22);
         _descScroll = GUI.BeginScrollView(descArea, _descScroll, new Rect(0, 0, w - 22, th));
-        GUI.Label(new Rect(0, 0, w - 22, th), desc, _wrap);
+        Lbl(new Rect(0, 0, w - 22, th), desc, _wrap);
         GUI.EndScrollView();
     }
 
@@ -270,16 +295,16 @@ static class ManagerUI
     {
         var core = Plugin.Core;
         float x = r.x;
-        if (GUI.Button(new Rect(x, r.y, 190, r.height), $"UPDATE ALL ({_updates})", _updates > 0 ? _btnOn : _btn) && _updates > 0)
-            Run("Updating all mods", () => core.UpdateAll(onlyAutoUpdate: false));
+        if (Btn(new Rect(x, r.y, 190, r.height), L.T("UPDATE ALL") + $" ({_updates})", _updates > 0 ? _btnOn : _btn) && _updates > 0)
+            Run(L.T("Updating all mods"), () => core.UpdateAll(onlyAutoUpdate: false));
         x += 198;
-        if (GUI.Button(new Rect(x, r.y, 210, r.height), "OPEN MODS FOLDER", _btn)) Open(core.ModsDir);
+        if (Btn(new Rect(x, r.y, 210, r.height), "OPEN MODS FOLDER", _btn)) Open(core.ModsDir);
         x += 218;
-        if (GUI.Button(new Rect(x, r.y, 170, r.height), "REFRESH LIST", _btn)) Run("Loading catalog", () => core.LoadCatalog(), changesFiles: false);
+        if (Btn(new Rect(x, r.y, 170, r.height), "REFRESH LIST", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
         x += 178;
-        if (GUI.Button(new Rect(r.xMax - 240, r.y, 240, r.height), "RESTART GAME", _restartNeeded ? _btnOn : _btn)) Restart();
-        var status = _busy ? _status + "  please wait..." : _restartNeeded && _status.Length == 0 ? "Changes apply after a restart" : _status;
-        GUI.Label(new Rect(x + 6, r.y, r.xMax - 250 - x, r.height), status, _status.StartsWith("Error") ? _bad : _muted);
+        if (Btn(new Rect(r.xMax - 240, r.y, 240, r.height), "RESTART GAME", _restartNeeded ? _btnOn : _btn)) Restart();
+        var status = _busy ? _status + "  " + L.T("please wait...") : _restartNeeded && _status.Length == 0 ? L.T("Changes apply after a restart") : _status;
+        Lbl(new Rect(x + 6, r.y, r.xMax - 250 - x, r.height), status, _statusErr ? _bad : _muted);
     }
 
     // ---------------- data ----------------
@@ -308,21 +333,39 @@ static class ManagerUI
 
     // ---------------- actions ----------------
 
-    static void InstallWithDeps(ModEntry e) => Run("Installing " + e.Title, () => Plugin.Core.InstallWithDependencies(e.Name));
+    static void InstallWithDeps(ModEntry e) => Run(L.T("Installing ") + e.Title, () => Plugin.Core.InstallWithDependencies(e.Name));
 
-    static void Run(string what, Action act, bool changesFiles = true)
+    static void CheckSelfUpdate() => Run(L.T("Checking for a Mod Manager update"), () => { }, changesFiles: false, custom: () =>
+    {
+        var core = Plugin.Core;
+        var (tag, url) = core.LatestSelf();
+        var cur = core.Installed.TryGetValue("ModManager", out var me) ? me.Version : "";
+        if (Core.CompareVersions(tag, cur) <= 0) return L.T("Mod Manager is up to date: ") + cur;
+        core.InstallSelf(url);
+        _restartNeeded = true;
+        return L.T("Mod Manager updated to ") + tag.TrimStart('v') + L.T(", restart the game to use it");
+    });
+
+    static bool _statusErr;
+
+    /// <param name="custom">Runs instead of <paramref name="act"/> and returns the final status text.</param>
+    static void Run(string what, Action act, bool changesFiles = true, Func<string> custom = null)
     {
         if (_busy) return;
-        _busy = true; _status = what;
+        _busy = true; _status = what; _statusErr = false;
         Task.Run(() =>
         {
             try
             {
-                act();
-                _status = changesFiles ? what + ": done, restart the game" : what + ": done";
-                if (changesFiles) _restartNeeded = true;
+                if (custom != null) _status = custom();
+                else
+                {
+                    act();
+                    _status = what + ": " + L.T(changesFiles ? "done, restart the game" : "done");
+                    if (changesFiles) _restartNeeded = true;
+                }
             }
-            catch (Exception ex) { _status = "Error: " + ex.Message; Plugin.Log.Error(ex.ToString()); }
+            catch (Exception ex) { _status = L.T("Error: ") + ex.Message; _statusErr = true; Plugin.Log.Error(ex.ToString()); }
             finally
             {
                 try { Plugin.Core.Scan(); } catch (Exception ex) { Plugin.Log.Error(ex.ToString()); }
@@ -334,7 +377,7 @@ static class ManagerUI
     static void Open(string target)
     {
         try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
-        catch (Exception ex) { _status = "Error: " + ex.Message; }
+        catch (Exception ex) { _status = L.T("Error: ") + ex.Message; _statusErr = true; }
     }
 
     static void Restart()
@@ -342,8 +385,11 @@ static class ManagerUI
         // wait for this process to exit, then start the exe again (Steam's DRM re-routes it through Steam if needed)
         var exe = Process.GetCurrentProcess().MainModule.FileName.Replace("'", "''");
         var dir = Path.GetDirectoryName(exe);
+        // a downloaded Mod Manager update waits in pending/ because the running game locks the plugin: swap it in once the game has exited
+        var pend = Path.Combine(Plugin.Core.PendingDir, "Plugins", "ModManager.dll").Replace("'", "''");
+        var self = Path.Combine(Plugin.Core.PluginsDir, "ModManager.dll").Replace("'", "''");
         Process.Start(new ProcessStartInfo("powershell.exe",
-            $"-NoProfile -WindowStyle Hidden -Command \"Wait-Process -Id {Environment.ProcessId} -ErrorAction SilentlyContinue; Start-Process -FilePath '{exe}' -WorkingDirectory '{dir}'\"")
+            $"-NoProfile -WindowStyle Hidden -Command \"Wait-Process -Id {Environment.ProcessId} -ErrorAction SilentlyContinue; if (Test-Path -LiteralPath '{pend}') {{ Copy-Item -LiteralPath '{pend}' -Destination '{self}' -Force; Remove-Item -LiteralPath '{pend}' -Force }}; Start-Process -FilePath '{exe}' -WorkingDirectory '{dir}'\"")
         { UseShellExecute = false, CreateNoWindow = true });
         Application.Quit();
     }

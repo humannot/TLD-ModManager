@@ -275,6 +275,34 @@ public sealed class Core
         Scan(); // so the next Resolve sees this mod as installed
     }
 
+    // ---------------- self update (GitHub releases) ----------------
+
+    public const string SelfRepo = "humannot/TLD-ModManager";
+
+    /// <summary>Newest release tag and the download URL of its ModManager.dll.</summary>
+    public (string tag, string url) LatestSelf()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var json = Http.GetStringAsync($"https://api.github.com/repos/{SelfRepo}/releases/latest", cts.Token).GetAwaiter().GetResult();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var tag = Str(root, "tag_name");
+        foreach (var a in root.GetProperty("assets").EnumerateArray())
+            if (Str(a, "name").Equals("ModManager.dll", StringComparison.OrdinalIgnoreCase))
+                return (tag, Str(a, "browser_download_url"));
+        throw new InvalidOperationException("Release " + tag + " has no ModManager.dll");
+    }
+
+    /// <summary>Takes effect on the next start (a locked file is deferred to the start after that).</summary>
+    public void InstallSelf(string url)
+    {
+        _log("Updating Mod Manager from " + url);
+        if (!url.StartsWith("https://github.com/" + SelfRepo + "/", StringComparison.Ordinal)) throw new InvalidDataException("Unexpected download URL: " + url);
+        var bytes = Http.GetByteArrayAsync(url).GetAwaiter().GetResult();
+        if (bytes.Length < 1024 || bytes[0] != 'M' || bytes[1] != 'Z') throw new InvalidDataException("Downloaded file is not a DLL");
+        Place(Path.Combine("Plugins", "ModManager.dll"), bytes);
+    }
+
     public void Uninstall(InstalledMod m)
     {
         if (m.IsSelf) throw new InvalidOperationException("Mod Manager cannot uninstall itself");

@@ -13,7 +13,8 @@ A MelonLoader plugin for **The Long Dark** that keeps your mods up to date and l
 - **Main-menu banner.** Shows whether auto-update is on, what was updated at launch and how many updates are waiting. Click it to open the manager.
 - **Ask on first run.** The first time the game starts with the plugin you are asked whether to update mods at launch; if you say yes, updating starts from the next launch. You can flip it any time with the *UPDATE ON LAUNCH* button in the manager.
 - If a mod file is locked by the running game, the change is applied on the next launch (`UserData/ModManager/pending`).
-- The plugin lists itself as an installed mod and cannot remove itself.
+- The plugin lists itself as an installed mod and cannot remove itself. **Check manager update** looks at this repository's latest GitHub release and downloads a newer `ModManager.dll`; press *Restart game* afterwards and the new version is swapped in.
+- **Follows the game language.** The interface is in Russian when the game is set to Russian, English otherwise.
 
 ## Installation
 1. Install MelonLoader 0.7.x.
