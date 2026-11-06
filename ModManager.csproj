@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <DebugType>embedded</DebugType>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- Il2Cppmscorlib hides NullableAttribute; annotations stay as documentation only -->
+    <Nullable>disable</Nullable>
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <Reference><Private>false</Private></Reference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <Reference Include="MelonLoader" HintPath="$(TLDDir)\MelonLoader\net6\MelonLoader.dll" />
+    <Reference Include="Mono.Cecil" HintPath="$(TLDDir)\MelonLoader\net6\Mono.Cecil.dll" />
+    <Reference Include="Il2CppInterop.Runtime" HintPath="$(TLDDir)\MelonLoader\net6\Il2CppInterop.Runtime.dll" />
+    <Reference Include="Il2Cppmscorlib" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll" />
+    <Reference Include="Assembly-CSharp" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.IMGUIModule.dll" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.InputLegacyModule.dll" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(TLDDir)\MelonLoader\Il2CppAssemblies\UnityEngine.TextRenderingModule.dll" />
+  </ItemGroup>
+
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(Deploy)' == 'true'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(TLDDir)\Plugins" />
+  </Target>
+
+</Project>

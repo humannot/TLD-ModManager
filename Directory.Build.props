@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <!-- Override with: dotnet build -p:TLDDir="X:\path\to\TheLongDark" -->
+    <TLDDir Condition="'$(TLDDir)' == ''">E:\Programs\Steam\steamapps\common\TheLongDark</TLDDir>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- MelonLoader 0.7 runs on net6; the EOL warning is expected. -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+  </PropertyGroup>
+</Project>
