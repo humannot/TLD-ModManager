@@ -36,7 +36,7 @@ static class ManagerUI
         if (_open && Input.GetKeyDown(KeyCode.Escape)) { if (_searchFocus) _searchFocus = false; else Toggle(); }
         if (_open || !Plugin.Asked.Value) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
         MenuDiagnostic();
-        if (_open) Img.Pump();
+        if (_open) { Img.Pump(); ListNavigation(); }
     }
 
     // Twice a second in the main menu: make sure the Mod Manager item is there and in the current language
@@ -136,25 +136,33 @@ static class ManagerUI
         SearchField(new Rect(r.xMax - 322, y, 300, 34));
         y += 44;
 
-        // sort order and list refresh; the mod catalog also gets the tiles / list switch
-        float sx = x, sl = L.T("SORT BY").Length * 9f + 10;
+        // left: refresh the catalog (an icon); sort order ends at the list's right edge; the mod catalog also gets the tiles / list switch
+        const float bottomH = 92;
+        float listW = Mathf.Floor(w * 0.56f), bodyH = r.yMax - y - 40 - bottomH - 10;
+        if (Btn(new Rect(x, y, 34, 30), "", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
+        DrawRefreshIcon(new Rect(x + 5, y + 3, 24, 24));
+        string[] sorts = { "NAME", "UPDATED", "AUTHOR" };
+        var sortLabels = new string[sorts.Length];
+        float sl = L.T("SORT BY").Length * 9f + 10, total = sl + 8;
+        for (int i = 0; i < sorts.Length; i++)
+        {
+            sortLabels[i] = L.T(sorts[i]) + (_sort == i ? (SortDescending ? "  v" : "  ^") : "");
+            total += BtnW(sortLabels[i], 100) + (i < sorts.Length - 1 ? 6 : 0);
+        }
+        float sx = x + listW - total;
         Lbl(new Rect(sx, y + 4, sl, 24), "SORT BY", _muted);
         sx += sl + 8;
-        string[] sorts = { "NAME", "UPDATED", "AUTHOR" };
         for (int i = 0; i < sorts.Length; i++)
         {
             bool on = _sort == i;
-            string label = L.T(sorts[i]) + (on ? (SortDescending ? "  v" : "  ^") : "");
-            float bw = BtnW(label, 100);
-            if (Btn(new Rect(sx, y, bw, 30), label, on ? _btnOn : _btn))
+            float bw = BtnW(sortLabels[i], 100);
+            if (Btn(new Rect(sx, y, bw, 30), sortLabels[i], on ? _btnOn : _btn))
             {
                 if (on) _sortFlip = !_sortFlip; else { _sort = i; _sortFlip = false; }
                 _listScroll = Vector2.zero;
             }
             sx += bw + 6;
         }
-        sx += 24;
-        if (Btn(new Rect(sx, y, BtnW("REFRESH LIST", 150), 30), "REFRESH LIST", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
         if (_tab == 1 && Btn(new Rect(r.xMax - 22 - 150, y, 150, 30), Plugin.TileView.Value ? "VIEW: TILES" : "VIEW: LIST", _btn))
         {
             Plugin.TileView.Value = !Plugin.TileView.Value;
@@ -162,9 +170,6 @@ static class ManagerUI
             _listScroll = Vector2.zero;
         }
         y += 40;
-
-        const float bottomH = 92;
-        float listW = Mathf.Floor(w * 0.56f), bodyH = r.yMax - y - bottomH - 10;
         DrawList(new Rect(x, y, listW, bodyH));
         DrawDetails(new Rect(x + listW + 14, y, r.xMax - 22 - (x + listW + 14), bodyH));
         DrawBottom(new Rect(x, r.yMax - 62, w - 44, 44));
@@ -208,9 +213,32 @@ static class ManagerUI
         }
     }
 
+    const float ListRowH = 50;
+    static float _listViewH, _navNext;
+
+    /// <summary>Up / Down arrows select the previous / next mod of the list view and keep it in sight; holding a key repeats.</summary>
+    static void ListNavigation()
+    {
+        if (!_open || _searchFocus || _rows.Count == 0 || (_rowsTab == 1 && Plugin.TileView.Value)) return;
+        int dir = Input.GetKey(KeyCode.DownArrow) ? 1 : Input.GetKey(KeyCode.UpArrow) ? -1 : 0;
+        if (dir == 0) return;
+        bool first = Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.UpArrow);
+        if (!first && Time.realtimeSinceStartup < _navNext) return;
+        _navNext = Time.realtimeSinceStartup + (first ? 0.4f : 0.06f);
+        int cur = _rows.FindIndex(r => r.Key == _sel);
+        int i = cur < 0 ? (dir > 0 ? 0 : _rows.Count - 1) : Mathf.Clamp(cur + dir, 0, _rows.Count - 1);
+        if (i == cur) return;
+        _sel = _rows[i].Key;
+        _descScroll = Vector2.zero;
+        float top = i * ListRowH, bottom = top + ListRowH;
+        if (top < _listScroll.y) _listScroll.y = top;
+        else if (bottom > _listScroll.y + _listViewH) _listScroll.y = bottom - _listViewH;
+    }
+
     static void DrawList(Rect area)
     {
-        const float rh = 50;
+        const float rh = ListRowH;
+        _listViewH = area.height;
         GUI.Box(area, "", _panel);
         if (_rows.Count == 0)
         {
@@ -257,6 +285,45 @@ static class ManagerUI
     }
 
     static bool _noDrawTexture;
+    static Texture2D _refreshIcon;
+
+    /// <summary>A circular arrow drawn into a texture (the game font has no arrow glyph to rely on).</summary>
+    static Texture2D RefreshIcon()
+    {
+        if (_refreshIcon != null) return _refreshIcon;
+        const int n = 48;
+        const float inner = 15f, outer = 20f, mid = (inner + outer) / 2, gapFrom = 25f, gapTo = 62f; // degrees: the ring is open between these, the arrowhead fills the opening
+        float c = (n - 1) / 2f;
+        Vector2 At(float deg, float rad) => new Vector2(c + rad * Mathf.Cos(deg * Mathf.Deg2Rad), c + rad * Mathf.Sin(deg * Mathf.Deg2Rad));
+        Vector2 tip = At(gapFrom - 6, mid), b1 = At(gapTo + 2, mid - 7), b2 = At(gapTo + 2, mid + 7);
+        float Side(Vector2 p, Vector2 a, Vector2 b) => (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+        var px = new Color[n * n];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                var p = new Vector2(x, y);
+                float d = Vector2.Distance(p, new Vector2(c, c));
+                float deg = Mathf.Atan2(y - c, x - c) * Mathf.Rad2Deg; if (deg < 0) deg += 360;
+                float a = deg > gapFrom && deg < gapTo ? 0 : Mathf.Clamp01(Mathf.Min(d - inner, outer - d) + 0.5f);
+                float s1 = Side(p, tip, b1), s2 = Side(p, b1, b2), s3 = Side(p, b2, tip);
+                if (!((s1 < 0 || s2 < 0 || s3 < 0) && (s1 > 0 || s2 > 0 || s3 > 0))) a = 1; // inside the arrowhead
+                px[y * n + x] = new Color(0.87f, 0.85f, 0.78f, a);
+            }
+        _refreshIcon = new Texture2D(n, n, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear };
+        _refreshIcon.SetPixels(px);
+        _refreshIcon.Apply();
+        return _refreshIcon;
+    }
+
+    static void DrawRefreshIcon(Rect r)
+    {
+        if (!_noDrawTexture)
+        {
+            try { GUI.DrawTexture(r, RefreshIcon(), ScaleMode.ScaleToFit); return; }
+            catch (Exception ex) { _noDrawTexture = true; Plugin.Log.Warning("GUI.DrawTexture unavailable: " + ex.Message); }
+        }
+        GUI.Label(r, "R", _text);
+    }
 
     /// <summary>Preview image cropped to the rect, or the mod's name on a dark panel while loading / when it has none.</summary>
     static void DrawBanner(ModEntry e, Rect r)
