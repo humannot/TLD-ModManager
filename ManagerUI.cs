@@ -24,7 +24,7 @@ static class ManagerUI
     static int _rowsTab = -1, _rowsSort = -1, _updates;
     static string _rowsSearch = "";
 
-    static GUIStyle _h2Wrap, _okLeft, _badge, _thumbText, _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
+    static GUIStyle _h2Wrap, _okLeft, _warnLeft, _tag, _badgeOld, _badge, _thumbText, _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
 
     // ---------------- input ----------------
 
@@ -341,7 +341,7 @@ static class ManagerUI
             GUI.Label(new Rect(r.x + 8, r.y + 4, r.width - 16, r.height - 8), e.Title, _thumbText);
         }
         // the game version the mod was tested on, as a badge in the image's corner
-        if (e.TestedTld.Length > 0) GUI.Box(new Rect(r.xMax - 84, r.y + 6, 78, 22), "TLD v" + e.TestedTld, _badge);
+        if (e.TestedTld.Length > 0) GUI.Box(new Rect(r.xMax - 84, r.y + 6, 78, 22), "TLD v" + e.TestedTld, Plugin.Core.IsOlderThanGame(e) ? _badgeOld : _badge);
     }
 
     static void DrawRow(Row row, Rect r)
@@ -351,10 +351,12 @@ static class ManagerUI
         var e = row.E;
         Lbl(new Rect(r.x + 12, r.y + 4, r.width - 280, 24), e?.Title ?? row.Key, _h2);
         Lbl(new Rect(r.x + 12, r.y + 26, r.width - 280, 20),
-            e != null ? e.Author + (e.TestedTld.Length > 0 ? "   |   TLD v" + e.TestedTld : "") : row.I != null && row.I.IsSelf ? "this plugin" : "not in the tldmods.net catalog", _muted);
+            e != null ? e.Author : row.I != null && row.I.IsSelf ? "this plugin" : "not in the tldmods.net catalog", _muted);
 
         string ver = row.I != null && e != null && core.HasUpdate(row.I) ? $"{row.I.Version} -> {e.Version}" : row.I != null && row.I.Version.Length > 0 ? row.I.Version : e != null ? e.Version : "";
-        Lbl(new Rect(r.xMax - 268, r.y + 14, 120, 24), ver, e != null && e.Error ? _bad : _muted);
+        Lbl(new Rect(r.xMax - 268, r.y + 5, 120, 22), ver, e != null && e.Error ? _bad : _muted);
+        // the game version the mod was tested on; amber when that is older than the installed game
+        if (e != null && e.TestedTld.Length > 0) Lbl(new Rect(r.xMax - 268, r.y + 26, 120, 20), "TLD v" + e.TestedTld, core.IsOlderThanGame(e) ? _warnLeft : _tag);
 
         // the action button is drawn before the row's click area so it gets the click first
         var btn = new Rect(r.xMax - 140, r.y + 8, 130, r.height - 16);
@@ -410,7 +412,12 @@ static class ManagerUI
         string catalogVer = e != null && e.Version.Length > 0 ? e.Version : "-";
         string localVer = inst == null ? L.T("no") : inst.Version.Length > 0 ? inst.Version : "?";
         Lbl(new Rect(x, y, w, 22), L.T("Version: ") + catalogVer + "   |   " + L.T("installed: ") + localVer, _text); y += 26;
-        if (e != null && e.TestedTld.Length > 0) { Lbl(new Rect(x, y, w, 22), L.T("Game version: ") + "TLD v" + e.TestedTld, _text); y += 24; }
+        if (e != null && e.TestedTld.Length > 0)
+        {
+            bool older = core.IsOlderThanGame(e);
+            Lbl(new Rect(x, y, w, 22), L.T("Game version: ") + "TLD v" + e.TestedTld, older ? _warnLeft : _text); y += 24;
+            if (older) { Lbl(new Rect(x, y, w, 22), string.Format(L.T("older than your game (TLD v{0}), may not work"), core.GameVersion), _warnLeft); y += 24; }
+        }
         if (e != null && e.Error) { Lbl(new Rect(x, y, w, 22), "! Marked as broken on tldmods.net", _bad); y += 24; }
 
         // dependencies
@@ -626,6 +633,10 @@ static class ManagerUI
         _h2Wrap = Label(Cream, 17, FontStyle.Bold); _h2Wrap.wordWrap = true; _h2Wrap.alignment = TextAnchor.UpperLeft;
         _okLeft = Label(new Color(0.58f, 0.78f, 0.52f), 15, FontStyle.Bold); // _ok is centred (it labels buttons); dependency lines are left-aligned
         _badge = Box(new Color(0.04f, 0.05f, 0.06f, 0.88f)); _badge.fontSize = 12; _badge.fontStyle = FontStyle.Bold; _badge.alignment = TextAnchor.MiddleCenter;
+        _badgeOld = Box(new Color(0.04f, 0.05f, 0.06f, 0.88f)); _badgeOld.fontSize = 12; _badgeOld.fontStyle = FontStyle.Bold; _badgeOld.alignment = TextAnchor.MiddleCenter;
+        _badgeOld.normal.textColor = new Color(0.93f, 0.72f, 0.38f); // amber: tested on an older game version than the installed one
+        _warnLeft = Label(new Color(0.93f, 0.72f, 0.38f), 14, FontStyle.Bold);
+        _tag = Label(Muted, 13);
         _thumbText = Label(Muted, 16, FontStyle.Bold); _thumbText.wordWrap = true; _thumbText.alignment = TextAnchor.MiddleCenter;
         _none = new GUIStyle();
         _ok.alignment = _warn.alignment = TextAnchor.MiddleCenter;

@@ -27,8 +27,8 @@ public sealed class Plugin : MelonPlugin
         var cat = MelonPreferences.CreateCategory("ModManager");
         AutoUpdate = cat.CreateEntry("AutoUpdate", false, description: "Update installed mods from tldmods.net at game start");
         Asked = cat.CreateEntry("AskedAutoUpdate", false, description: "The first-run question about auto-update was answered");
-        TileView = cat.CreateEntry("TileView", true, description: "Show the Available tab as tiles with preview images (false = list)");
-        Core = new Core(MelonEnvironment.GameRootDirectory, s => Log.Msg(s));
+        TileView = cat.CreateEntry("TileView", true, description: "Show the mod catalog tab as tiles with preview images (false = list)");
+        Core = new Core(MelonEnvironment.GameRootDirectory, s => Log.Msg(s)) { GameVersion = MelonLoader.InternalUtils.UnityInformationHandler.GameVersion ?? "" };
         try
         {
             if (Core.ApplyPending() is > 0 and var p) Log.Msg($"Applied deferred files: {p}");

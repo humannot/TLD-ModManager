@@ -46,6 +46,7 @@ static class L
         ["UPDATED"] = "ОБНОВЛЕНИЕ",
         ["AUTHOR"] = "АВТОР",
         ["Game version: "] = "Версия игры: ",
+        ["older than your game (TLD v{0}), may not work"] = "старее вашей игры (TLD v{0}), может не работать",
         ["TRANSLATE DESCRIPTION"] = "ПЕРЕВЕСТИ ОПИСАНИЕ",
         ["HIDE TRANSLATION"] = "СКРЫТЬ ПЕРЕВОД",
         ["TRANSLATION"] = "ПЕРЕВОД",

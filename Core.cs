@@ -46,6 +46,12 @@ public sealed class Core
     readonly string _manifestPath, _cachePath;
     readonly Action<string> _log;
 
+    /// <summary>The installed game's version, e.g. "2.60" (set by the plugin; empty when unknown).</summary>
+    public string GameVersion = "";
+
+    /// <summary>True when the mod was last tested on an older game version than the installed one, so it may no longer work.</summary>
+    public bool IsOlderThanGame(ModEntry e) => GameVersion.Length > 0 && e.TestedTld.Length > 0 && CompareVersions(GameVersion, e.TestedTld) > 0;
+
     public List<ModEntry> Catalog { get; private set; } = new();
     Dictionary<string, ModEntry> _index = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, InstalledMod> Installed { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
