@@ -31,6 +31,9 @@ public sealed class InstalledMod
     public bool IsSelf; // this plugin: always listed as installed, never removed or replaced from the list
     public ModEntry Entry;
     public readonly List<string> Files = new(); // paths relative to game root
+    public int EnabledFiles, DisabledFiles;
+    /// <summary>A disabled mod keeps its files under a .disabled name, which MelonLoader does not load.</summary>
+    public bool Disabled => DisabledFiles > 0 && EnabledFiles == 0;
 }
 
 /// <summary>Everything that touches the network or disk. No Unity / MelonLoader types, so it runs before mods load and in tests.</summary>
@@ -146,19 +149,21 @@ public sealed class Core
         foreach (var dir in new[] { ModsDir, PluginsDir })
         {
             if (!Directory.Exists(dir)) continue;
-            foreach (var path in Directory.EnumerateFiles(dir))
+            foreach (var file in Directory.EnumerateFiles(dir))
             {
+                bool off = file.EndsWith(DisabledSuffix, StringComparison.OrdinalIgnoreCase);
+                var path = off ? file[..^DisabledSuffix.Length] : file; // the name the file has while enabled
                 var ext = Path.GetExtension(path).ToLowerInvariant();
                 if (ext != ".dll" && ext != ".modcomponent") continue;
                 string stem = Path.GetFileNameWithoutExtension(path), version = "";
                 ModEntry entry = null;
                 if (ext == ".dll")
                 {
-                    var (melonName, melonVersion) = ReadMelonInfo(path);
+                    var (melonName, melonVersion) = ReadMelonInfo(file);
                     version = melonVersion;
                     if (melonName == "ModManager")
                     {
-                        found["ModManager"] = new InstalledMod { Key = "ModManager", Version = version, IsSelf = true, Files = { Path.GetRelativePath(Root, path) } };
+                        found["ModManager"] = new InstalledMod { Key = "ModManager", Version = version, IsSelf = true, Files = { Path.GetRelativePath(Root, file) } };
                         continue;
                     }
                     if (melonName.Length > 0) entry = Find(melonName);
@@ -166,7 +171,8 @@ public sealed class Core
                 entry ??= Find(stem);
                 var key = entry?.Name ?? stem;
                 if (!found.TryGetValue(key, out var mod)) found[key] = mod = new InstalledMod { Key = key, Entry = entry };
-                mod.Files.Add(Path.GetRelativePath(Root, path));
+                mod.Files.Add(Path.GetRelativePath(Root, file));
+                if (off) mod.DisabledFiles++; else mod.EnabledFiles++;
                 if (mod.Version.Length == 0) mod.Version = version;
             }
         }
@@ -250,6 +256,9 @@ public sealed class Core
         _log($"Installing {e.Title} {e.Version}");
         var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var targetDir = e.Type.Equals("plugin", StringComparison.OrdinalIgnoreCase) ? "Plugins" : "Mods";
+        Installed.TryGetValue(e.Name, out var old);
+        // updating a disabled mod must not switch it back on
+        string Name(string rel) => old is { Disabled: true } && (rel.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || rel.EndsWith(".modcomponent", StringComparison.OrdinalIgnoreCase)) ? rel + DisabledSuffix : rel;
         foreach (var url in e.Files)
         {
             var file = ModEntry.FileName(url);
@@ -261,20 +270,20 @@ public sealed class Core
                 {
                     using var ms = new MemoryStream();
                     entry.Open().CopyTo(ms);
-                    var rel = ZipTarget(entry.FullName, targetDir);
+                    var rel = Name(ZipTarget(entry.FullName, targetDir));
                     Place(rel, ms.ToArray());
                     written.Add(rel);
                 }
             }
             else
             {
-                var rel = Path.Combine(targetDir, file);
+                var rel = Name(Path.Combine(targetDir, file));
                 Place(rel, bytes);
                 written.Add(rel);
             }
         }
         // a renamed release file must not leave the old copy loading next to the new one
-        if (Installed.TryGetValue(e.Name, out var old))
+        if (old != null)
             foreach (var f in old.Files.Where(f => !written.Contains(f))) Delete(f);
         lock (_lock) { _manifest[e.Name] = e.Version; SaveManifest(); }
         Scan(); // so the next Resolve sees this mod as installed
@@ -436,6 +445,34 @@ public sealed class Core
         return n;
     }
 
+    // ---------------- disable / enable ----------------
+
+    const string DisabledSuffix = ".disabled";
+
+    /// <summary>
+    /// Disables or enables a mod by renaming its files to or from <c>*.disabled</c>. Takes effect at the next start;
+    /// a file the running game holds is renamed then (see <see cref="ApplyPending"/>).
+    /// </summary>
+    public void SetEnabled(InstalledMod m, bool enable)
+    {
+        if (m.IsSelf) throw new InvalidOperationException("Mod Manager cannot disable itself");
+        foreach (var f in m.Files.ToList())
+        {
+            bool off = f.EndsWith(DisabledSuffix, StringComparison.OrdinalIgnoreCase);
+            if (off == !enable) continue; // already in the wanted state
+            var to = enable ? f[..^DisabledSuffix.Length] : f + DisabledSuffix;
+            try { File.Move(Path.Combine(Root, f), Path.Combine(Root, to), true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                var p = Path.Combine(PendingDir, f + ".rename");
+                Directory.CreateDirectory(Path.GetDirectoryName(p)!);
+                File.WriteAllText(p, to);
+            }
+        }
+        _log((enable ? "Enabled " : "Disabled ") + m.Key);
+        Scan();
+    }
+
     // ---------------- file ops (locked files are deferred to the next start) ----------------
 
     public bool HasPending => Directory.Exists(PendingDir) && Directory.EnumerateFiles(PendingDir, "*", SearchOption.AllDirectories).Any();
@@ -478,6 +515,12 @@ public sealed class Core
             {
                 var rel = Path.GetRelativePath(PendingDir, p);
                 if (rel.EndsWith(".delete")) File.Delete(Path.Combine(Root, rel[..^".delete".Length]));
+                else if (rel.EndsWith(".rename"))
+                {
+                    var to = Path.GetFullPath(Path.Combine(Root, File.ReadAllText(p).Trim()));
+                    if (!to.StartsWith(Path.GetFullPath(Root), StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Rename target outside the game folder");
+                    File.Move(Path.Combine(Root, rel[..^".rename".Length]), to, true);
+                }
                 else
                 {
                     var target = Path.Combine(Root, rel);

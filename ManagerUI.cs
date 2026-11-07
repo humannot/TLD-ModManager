@@ -105,8 +105,9 @@ static class ManagerUI
         if (!_open) return;
 
         GUI.Box(new Rect(0, 0, Screen.width, Screen.height), "", _dim);
-        float w = Mathf.Min(1180, Screen.width - 40), h = Mathf.Min(800, Screen.height - 40);
-        var r = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
+        const float margin = 20;
+        float w = Screen.width - 2 * margin, h = Screen.height - 2 * margin;
+        var r = new Rect(margin, margin, w, h);
         GUI.Box(r, "", _bg);
 
         float x = r.x + 22, y = r.y + 18;
@@ -212,7 +213,8 @@ static class ManagerUI
     // Tiles like tldmods.net: preview image on top, name, author and the install button below. Only the "Available" tab uses them.
     static void DrawTiles(Rect area)
     {
-        const int cols = 3; const float gap = 8, footer = 74;
+        const float gap = 8, footer = 74;
+        int cols = Mathf.Max(3, (int)((area.width - 30) / 250)); // wider window, more tiles per row
         float tw = (area.width - 22 - gap * (cols - 1) - 8) / cols, ih = Mathf.Floor(tw * 9f / 16f), th = ih + footer;
         int rowsN = (_rows.Count + cols - 1) / cols;
         var view = new Rect(0, 0, area.width - 22, 4 + rowsN * (th + gap));
@@ -274,7 +276,7 @@ static class ManagerUI
         var btn = new Rect(r.xMax - 140, r.y + 8, 130, r.height - 16);
         if (e != null && row.I == null && e.CanInstall) { if (Btn(btn, "INSTALL", _btn)) InstallWithDeps(e); }
         else if (row.I != null && core.HasUpdate(row.I)) { if (Btn(btn, "UPDATE", _btnOn)) Run(L.T("Updating ") + e.Title, () => core.Install(e)); }
-        else if (row.I != null) Lbl(btn, "INSTALLED", _ok);
+        else if (row.I != null) Lbl(btn, row.I.Disabled ? "DISABLED" : "INSTALLED", row.I.Disabled ? _warn : _ok);
         else if (e != null) Lbl(btn, "MANUAL", _warn);
 
         if (Btn(new Rect(r.x, r.y, r.width - 145, r.height), "", _none)) { _sel = row.Key; _descScroll = Vector2.zero; }
@@ -334,6 +336,12 @@ static class ManagerUI
             Run(L.T("Removing ") + inst.Key, () => core.Uninstall(inst));
         else if (inst == null && e != null && e.CanInstall && e.ModUrl.Length > 0 && Btn(new Rect(x + bw + 10, y, bw, 36), "MOD PAGE", _btn)) Open(e.ModUrl);
         y += 46;
+        if (inst != null && !inst.IsSelf)
+        {
+            if (Btn(new Rect(x, y, w, 36), inst.Disabled ? "ENABLE" : "DISABLE", inst.Disabled ? _btnOn : _btn))
+                Run(L.T(inst.Disabled ? "Enabling " : "Disabling ") + inst.Key, () => core.SetEnabled(inst, inst.Disabled));
+            y += 46;
+        }
 
         // description
         var desc = e != null ? (Translated.TryGetValue(e.Name, out var tr) && ShowTranslation.ContainsKey(e.Name) ? tr : e.Description) : inst.IsSelf ? "This is Mod Manager itself: it updates your other mods and installs new ones from tldmods.net." : "Files: " + string.Join(", ", inst.Files);

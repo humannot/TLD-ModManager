@@ -2,7 +2,7 @@
 
 A MelonLoader plugin for **The Long Dark** that keeps your mods up to date and lets you browse and install new ones from inside the game. Mod data comes from [tldmods.net](https://tldmods.net/).
 
-> **Unofficial project.** This plugin is not affiliated with, endorsed by or connected to Hinterland Studio (the developers of The Long Dark), the developers of MelonLoader, or the tldmods.net website. All names belong to their respective owners.
+> **Unofficial project.** This plugin is not endorsed by and not affiliated with Hinterland Studio (the developers of The Long Dark), MelonLoader or the tldmods.net website. All mentioned names and materials belong to their respective owners.
 
 ## Features
 - **Auto-update on launch.** The plugin loads before your mods, compares installed versions with tldmods.net and replaces outdated files before the game loads them, so no extra restart is needed.
@@ -10,7 +10,7 @@ A MelonLoader plugin for **The Long Dark** that keeps your mods up to date and l
   - tabs for *Installed*, *Available* and *Updates*, plus search by name, author or category;
   - one-click install, with all dependencies installed first;
   - every dependency is marked present or missing, and **Download missing** fetches the rest;
-  - update one mod or all of them, remove a mod;
+  - update one mod or all of them, disable or enable a mod without removing it (its files get a `.disabled` suffix), remove a mod;
   - **Open mods folder** and **Restart game** buttons.
 - **Sorting** by name, last update or author; click the active sort again to reverse it.
 - **Game version.** Every mod shows the game version it was last tested on (for example `TLD v2.59`), as a badge on its image, in the list and in the details.
@@ -35,6 +35,7 @@ Stored in `UserData/MelonPreferences.cfg`, section `[ModManager]`:
 ## Limitations
 - It installs `.dll`, `.modcomponent` and `.zip` downloads. Mods distributed as `.7z`, `.rar` or an installer show a **Mod page** button instead.
 - An installed mod is recognised by the `MelonInfo` inside its DLL or by its file name. If the version is unknown (for example a hand-copied `.modcomponent`), auto-update leaves it alone and the manager offers the update instead.
+- Disabling and enabling take effect at the next game start. A disabled mod still counts as present when another mod's dependencies are checked.
 - The main-menu button depends on the game's menu code; if a game update breaks it, F8 still opens the manager.
 
 ## Building
