@@ -376,10 +376,20 @@ static class ManagerUI
         }
 
         // description
-        var desc = e != null ? (Translated.TryGetValue(e.Name, out var tr) && ShowTranslation.ContainsKey(e.Name) ? tr : e.Description) : inst.IsSelf ? "This is Mod Manager itself: it updates your other mods and installs new ones from tldmods.net." : "Files: " + string.Join(", ", inst.Files);
+        var desc = e != null ? e.Description : inst.IsSelf ? "This is Mod Manager itself: it updates your other mods and installs new ones from tldmods.net." : "Files: " + string.Join(", ", inst.Files);
         float th = _wrap.CalcHeight(new GUIContent(L.T(desc)), w);
         Lbl(new Rect(x, y, w, th), desc, _wrap);
-        _detailsH = y + th + 16;
+        y += th;
+        // the translation goes under the original text
+        if (e != null && ShowTranslation.ContainsKey(e.Name) && Translated.TryGetValue(e.Name, out var tr))
+        {
+            y += 12;
+            Lbl(new Rect(x, y, w, 24), "TRANSLATION", _h2); y += 28;
+            float trH = _wrap.CalcHeight(new GUIContent(tr), w);
+            GUI.Label(new Rect(x, y, w, trH), tr, _wrap);
+            y += trH;
+        }
+        _detailsH = y + 16;
         GUI.EndScrollView();
     }
 
@@ -402,7 +412,7 @@ static class ManagerUI
         var sel = core.Find(_sel);
         // the free translation service is used for Russian only; the button needs a catalog description to work on
         if (L.Russian && sel != null && sel.Description.Length > 0 &&
-            Next(ShowTranslation.ContainsKey(sel.Name) ? "SHOW ORIGINAL" : "TRANSLATE DESCRIPTION", _btn))
+            Next(ShowTranslation.ContainsKey(sel.Name) ? "HIDE TRANSLATION" : "TRANSLATE DESCRIPTION", _btn))
             ToggleTranslation(sel);
         float rw = BtnW("RESTART GAME", 200);
         if (Btn(new Rect(r.xMax - rw, r.y, rw, r.height), "RESTART GAME", _restartNeeded ? _btnOn : _btn)) Restart();
