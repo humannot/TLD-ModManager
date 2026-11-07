@@ -33,7 +33,7 @@ static class L
         ["YES"] = "ДА",
         ["NO"] = "НЕТ",
         ["INSTALLED"] = "УСТАНОВЛЕННЫЕ",
-        ["AVAILABLE"] = "ДОСТУПНЫЕ",
+        ["MOD CATALOG"] = "КАТАЛОГ МОДОВ",
         ["UPDATES"] = "ОБНОВЛЕНИЯ",
         ["SEARCH"] = "ПОИСК",
         ["DISABLE"] = "ОТКЛЮЧИТЬ",

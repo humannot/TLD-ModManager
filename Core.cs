@@ -151,6 +151,8 @@ public sealed class Core
             if (!Directory.Exists(dir)) continue;
             foreach (var file in Directory.EnumerateFiles(dir))
             {
+                // removing a file the running game holds is queued for the next start; until then the mod counts as gone
+                if (File.Exists(Path.Combine(PendingDir, Path.GetRelativePath(Root, file) + ".delete"))) continue;
                 bool off = file.EndsWith(DisabledSuffix, StringComparison.OrdinalIgnoreCase);
                 var path = off ? file[..^DisabledSuffix.Length] : file; // the name the file has while enabled
                 var ext = Path.GetExtension(path).ToLowerInvariant();
@@ -481,6 +483,8 @@ public sealed class Core
     {
         var target = Path.Combine(Root, rel);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        var stale = Path.Combine(PendingDir, rel + ".delete"); // a queued removal of this file must not delete the new copy
+        if (File.Exists(stale)) File.Delete(stale);
         try { File.WriteAllBytes(target, bytes); }
         catch (IOException)
         {

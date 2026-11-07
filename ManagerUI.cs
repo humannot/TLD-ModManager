@@ -124,7 +124,7 @@ static class ManagerUI
         y += 52;
 
         var core = Plugin.Core;
-        string[] tabs = { L.T("INSTALLED") + $" ({core.Installed.Count})", L.T("AVAILABLE") + $" ({core.Catalog.Count(e => !core.Installed.ContainsKey(e.Name))})", L.T("UPDATES") + $" ({_updates})" };
+        string[] tabs = { L.T("INSTALLED") + $" ({core.Installed.Count})", L.T("MOD CATALOG") + $" ({core.Catalog.Count(e => !core.Installed.ContainsKey(e.Name))})", L.T("UPDATES") + $" ({_updates})" };
         float tx = x;
         for (int i = 0; i < tabs.Length; i++)
         {
@@ -136,7 +136,7 @@ static class ManagerUI
         SearchField(new Rect(r.xMax - 322, y, 300, 34));
         y += 44;
 
-        // sort order; "Available" also gets the tiles / list switch
+        // sort order and list refresh; the mod catalog also gets the tiles / list switch
         float sx = x, sl = L.T("SORT BY").Length * 9f + 10;
         Lbl(new Rect(sx, y + 4, sl, 24), "SORT BY", _muted);
         sx += sl + 8;
@@ -153,6 +153,8 @@ static class ManagerUI
             }
             sx += bw + 6;
         }
+        sx += 24;
+        if (Btn(new Rect(sx, y, BtnW("REFRESH LIST", 150), 30), "REFRESH LIST", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
         if (_tab == 1 && Btn(new Rect(r.xMax - 22 - 150, y, 150, 30), Plugin.TileView.Value ? "VIEW: TILES" : "VIEW: LIST", _btn))
         {
             Plugin.TileView.Value = !Plugin.TileView.Value;
@@ -224,7 +226,7 @@ static class ManagerUI
         GUI.EndScrollView();
     }
 
-    // Tiles like tldmods.net: preview image on top, name, author and the install button below. Only the "Available" tab uses them.
+    // Tiles like tldmods.net: preview image on top, name, author and the install button below. Only the mod catalog tab uses them.
     static void DrawTiles(Rect area)
     {
         const float gap = 8, footer = 104; // two lines of title, the author and the install button
@@ -314,7 +316,10 @@ static class ManagerUI
         }
 
         // laid out from the panel's top-left corner; scrolls when the content (a large image, many dependencies) is taller than the panel
-        _descScroll = GUI.BeginScrollView(area, _descScroll, new Rect(0, 0, area.width - 24, Mathf.Max(_detailsH, area.height)));
+        // the translate button sits at the bottom of the panel (Russian only: the free service is used for Russian; needs a catalog description)
+        bool canTranslate = L.Russian && e != null && e.Description.Length > 0;
+        var view = canTranslate ? new Rect(area.x, area.y, area.width, area.height - 54) : area;
+        _descScroll = GUI.BeginScrollView(view, _descScroll, new Rect(0, 0, view.width - 24, Mathf.Max(_detailsH, view.height)));
         float x = 16, y = 14, w = area.width - 24 - 32;
         Lbl(new Rect(x, y, w, 32), e != null ? e.Title : _sel, _title); y += 38;
         if (e != null && e.Banner != null)
@@ -391,35 +396,30 @@ static class ManagerUI
         }
         _detailsH = y + 16;
         GUI.EndScrollView();
+        if (canTranslate)
+        {
+            string label = ShowTranslation.ContainsKey(e.Name) ? "HIDE TRANSLATION" : "TRANSLATE DESCRIPTION";
+            if (Btn(new Rect(area.x + 16, area.yMax - 46, BtnW(label, 200), 36), label, _btn)) ToggleTranslation(e);
+        }
     }
 
     static void DrawBottom(Rect r)
     {
         var core = Plugin.Core;
-        float x = r.x;
-        // buttons are placed left to right, each as wide as its text needs
-        bool Next(string text, GUIStyle s)
+        // left: update everything, only where there is something installed to update (not in the catalog)
+        if (_rowsTab != 1)
         {
-            float bw = BtnW(text, 150);
-            bool hit = Btn(new Rect(x, r.y, bw, r.height), text, s);
-            x += bw + 8;
-            return hit;
+            string upd = L.T("UPDATE ALL") + $" ({_updates})";
+            if (Btn(new Rect(r.x, r.y, BtnW(upd, 150), r.height), upd, _updates > 0 ? _btnOn : _btn) && _updates > 0)
+                Run(L.T("Updating all mods"), () => core.UpdateAll(onlyAutoUpdate: false));
         }
-        if (Next(L.T("UPDATE ALL") + $" ({_updates})", _updates > 0 ? _btnOn : _btn) && _updates > 0)
-            Run(L.T("Updating all mods"), () => core.UpdateAll(onlyAutoUpdate: false));
-        if (Next("OPEN MODS FOLDER", _btn)) Open(core.ModsDir);
-        if (Next("REFRESH LIST", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
-        var sel = core.Find(_sel);
-        // the free translation service is used for Russian only; the button needs a catalog description to work on
-        if (L.Russian && sel != null && sel.Description.Length > 0 &&
-            Next(ShowTranslation.ContainsKey(sel.Name) ? "HIDE TRANSLATION" : "TRANSLATE DESCRIPTION", _btn))
-            ToggleTranslation(sel);
-        float rw = BtnW("RESTART GAME", 200);
+        // right: the mods folder next to the restart button
+        float rw = BtnW("RESTART GAME", 200), ow = BtnW("OPEN MODS FOLDER", 150);
         if (Btn(new Rect(r.xMax - rw, r.y, rw, r.height), "RESTART GAME", _restartNeeded ? _btnOn : _btn)) Restart();
+        if (Btn(new Rect(r.xMax - rw - 8 - ow, r.y, ow, r.height), "OPEN MODS FOLDER", _btn)) Open(core.ModsDir);
         var status = _busy ? _status + "  " + L.T("please wait...") : _restartNeeded && _status.Length == 0 ? L.T("Changes apply after a restart") : _status;
         Lbl(new Rect(r.x, r.y - 28, r.width, 24), status, _statusErr ? _bad : _muted);
     }
-
     // mod name -> Russian description; written by the worker thread, read by OnGUI
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Translated = new();
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ShowTranslation = new();
