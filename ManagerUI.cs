@@ -24,7 +24,7 @@ static class ManagerUI
     static int _rowsTab = -1, _rowsSort = -1, _updates;
     static string _rowsSearch = "";
 
-    static GUIStyle _badge, _thumbText, _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
+    static GUIStyle _h2Wrap, _okLeft, _badge, _thumbText, _dim, _bg, _panel, _row, _rowSel, _btn, _btnOn, _field, _title, _h2, _text, _muted, _wrap, _ok, _bad, _warn, _none;
 
     // ---------------- input ----------------
 
@@ -32,6 +32,8 @@ static class ManagerUI
     {
         if (Plugin.Core == null) return;
         if (Input.GetKeyDown(KeyCode.F8) && Plugin.Asked.Value) Toggle();
+        // Esc leaves the search box first, then closes the window
+        if (_open && Input.GetKeyDown(KeyCode.Escape)) { if (_searchFocus) _searchFocus = false; else Toggle(); }
         if (_open || !Plugin.Asked.Value) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
         MenuDiagnostic();
         if (_open) Img.Pump();
@@ -77,6 +79,8 @@ static class ManagerUI
     }
 
     static bool Btn(Rect r, string text, GUIStyle s) => GUI.Button(r, L.T(text), s);
+    /// <summary>Width a button needs for its text (bold capitals, about 11 px a character at the 15 px font) so labels are never cut.</summary>
+    static float BtnW(string text, float min) => Mathf.Max(min, L.T(text).Length * 11f + 36f);
     static void Lbl(Rect r, string text, GUIStyle s) => GUI.Label(r, L.T(text), s);
 
     // the scene's name is not "MainMenu" in every edition, so ask the game
@@ -121,23 +125,33 @@ static class ManagerUI
 
         var core = Plugin.Core;
         string[] tabs = { L.T("INSTALLED") + $" ({core.Installed.Count})", L.T("AVAILABLE") + $" ({core.Catalog.Count(e => !core.Installed.ContainsKey(e.Name))})", L.T("UPDATES") + $" ({_updates})" };
+        float tx = x;
         for (int i = 0; i < tabs.Length; i++)
-            if (Btn(new Rect(x + i * 202, y, 196, 34), tabs[i], _tab == i ? _btnOn : _btn)) { _tab = i; _listScroll = Vector2.zero; }
+        {
+            float bw = BtnW(tabs[i], 150);
+            if (Btn(new Rect(tx, y, bw, 34), tabs[i], _tab == i ? _btnOn : _btn)) { _tab = i; _listScroll = Vector2.zero; }
+            tx += bw + 6;
+        }
         Lbl(new Rect(r.xMax - 392, y + 6, 70, 24), "SEARCH", _muted);
         SearchField(new Rect(r.xMax - 322, y, 300, 34));
         y += 44;
 
         // sort order; "Available" also gets the tiles / list switch
-        Lbl(new Rect(x, y + 3, 84, 24), "SORT BY", _muted);
+        float sx = x, sl = L.T("SORT BY").Length * 9f + 10;
+        Lbl(new Rect(sx, y + 4, sl, 24), "SORT BY", _muted);
+        sx += sl + 8;
         string[] sorts = { "NAME", "UPDATED", "AUTHOR" };
         for (int i = 0; i < sorts.Length; i++)
         {
             bool on = _sort == i;
-            if (Btn(new Rect(x + 84 + i * 128, y, 120, 30), L.T(sorts[i]) + (on ? (SortDescending ? "  v" : "  ^") : ""), on ? _btnOn : _btn))
+            string label = L.T(sorts[i]) + (on ? (SortDescending ? "  v" : "  ^") : "");
+            float bw = BtnW(label, 100);
+            if (Btn(new Rect(sx, y, bw, 30), label, on ? _btnOn : _btn))
             {
                 if (on) _sortFlip = !_sortFlip; else { _sort = i; _sortFlip = false; }
                 _listScroll = Vector2.zero;
             }
+            sx += bw + 6;
         }
         if (_tab == 1 && Btn(new Rect(r.xMax - 22 - 150, y, 150, 30), Plugin.TileView.Value ? "VIEW: TILES" : "VIEW: LIST", _btn))
         {
@@ -166,7 +180,7 @@ static class ManagerUI
         Lbl(new Rect(r.x + 8, r.y, r.width - 16, r.height), _search + (caret ? "|" : ""), _text);
         if (!_searchFocus || e.type != EventType.KeyDown) return;
         if (e.keyCode == KeyCode.Backspace) { if (_search.Length > 0) _search = _search.Substring(0, _search.Length - 1); e.Use(); }
-        else if (e.keyCode == KeyCode.Escape || e.keyCode == KeyCode.Return) { _searchFocus = false; e.Use(); }
+        else if (e.keyCode == KeyCode.Return) { _searchFocus = false; e.Use(); }
         else if (e.character >= ' ' && e.character != (char)127) { _search += e.character; e.Use(); }
     }
 
@@ -213,7 +227,7 @@ static class ManagerUI
     // Tiles like tldmods.net: preview image on top, name, author and the install button below. Only the "Available" tab uses them.
     static void DrawTiles(Rect area)
     {
-        const float gap = 8, footer = 74;
+        const float gap = 8, footer = 104; // two lines of title, the author and the install button
         int cols = Mathf.Max(3, (int)((area.width - 30) / 250)); // wider window, more tiles per row
         float tw = (area.width - 22 - gap * (cols - 1) - 8) / cols, ih = Mathf.Floor(tw * 9f / 16f), th = ih + footer;
         int rowsN = (_rows.Count + cols - 1) / cols;
@@ -229,10 +243,11 @@ static class ManagerUI
     static void DrawTile(Row row, Rect r, float imgH)
     {
         var e = row.E;
+        if (e == null) return;
         GUI.Box(r, "", row.Key == _sel ? _rowSel : _row);
         DrawBanner(e, new Rect(r.x, r.y, r.width, imgH));
-        Lbl(new Rect(r.x + 8, r.y + imgH + 4, r.width - 16, 22), e.Title, _h2);
-        Lbl(new Rect(r.x + 8, r.y + imgH + 24, r.width - 16, 18), e.Author, _muted);
+        Lbl(new Rect(r.x + 8, r.y + imgH + 4, r.width - 16, 44), e.Title, _h2Wrap);
+        Lbl(new Rect(r.x + 8, r.y + imgH + 50, r.width - 16, 20), e.Author, _muted);
         var btn = new Rect(r.x + 8, r.yMax - 32, r.width - 16, 26);
         if (e.CanInstall) { if (Btn(btn, "INSTALL", _btn)) InstallWithDeps(e); }
         else Lbl(btn, "MANUAL", _warn);
@@ -282,6 +297,9 @@ static class ManagerUI
         if (Btn(new Rect(r.x, r.y, r.width - 145, r.height), "", _none)) { _sel = row.Key; _descScroll = Vector2.zero; }
     }
 
+    static float _detailsH; // height of the details content from the previous frame: the scroll view needs it before the content is laid out
+    const float MaxImageH = 550;
+
     static void DrawDetails(Rect area)
     {
         GUI.Box(area, "", _panel);
@@ -295,9 +313,23 @@ static class ManagerUI
             return;
         }
 
-        float x = area.x + 16, y = area.y + 14, w = area.width - 32;
+        // laid out from the panel's top-left corner; scrolls when the content (a large image, many dependencies) is taller than the panel
+        _descScroll = GUI.BeginScrollView(area, _descScroll, new Rect(0, 0, area.width - 24, Mathf.Max(_detailsH, area.height)));
+        float x = 16, y = 14, w = area.width - 24 - 32;
         Lbl(new Rect(x, y, w, 32), e != null ? e.Title : _sel, _title); y += 38;
-        if (e != null && e.Banner != null) { DrawBanner(e, new Rect(x, y, w, 130)); y += 138; }
+        if (e != null && e.Banner != null)
+        {
+            var tex = Img.Get(e.Banner);
+            if (tex != null)
+            {
+                // full size, shrunk only to fit the panel's width and MaxImageH; a smaller image leaves more room for the content below
+                float s = Mathf.Min(1f, w / tex.width, MaxImageH / tex.height);
+                float ih = tex.height * s;
+                DrawBanner(e, new Rect(x, y, tex.width * s, ih));
+                y += ih + 10;
+            }
+            else if (!Img.Failed(e.Banner)) { DrawBanner(e, new Rect(x, y, w, 130)); y += 138; } // still loading
+        }
         if (e != null)
         {
             Lbl(new Rect(x, y, w, 22), L.T("Author: ") + e.Author, _text); y += 24;
@@ -316,7 +348,7 @@ static class ManagerUI
             foreach (var d in e.Dependencies)
             {
                 bool have = core.IsInstalled(d), known = core.Find(d) != null;
-                Lbl(new Rect(x + 8, y, w, 22), (have ? "[x]  " : "[ ]  ") + d + (known || have ? "" : "  " + L.T("(not in catalog)")), have ? _ok : _bad); y += 22;
+                Lbl(new Rect(x + 8, y, w, 22), (have ? "[x]  " : "[ ]  ") + d + (known || have ? "" : "  " + L.T("(not in catalog)")), have ? _okLeft : _bad); y += 22;
             }
             var missing = core.MissingDependencies(e).Count();
             if (missing > 0 && Btn(new Rect(x, y + 4, w, 34), L.T("DOWNLOAD MISSING") + $" ({missing})", _btnOn))
@@ -345,11 +377,9 @@ static class ManagerUI
 
         // description
         var desc = e != null ? (Translated.TryGetValue(e.Name, out var tr) && ShowTranslation.ContainsKey(e.Name) ? tr : e.Description) : inst.IsSelf ? "This is Mod Manager itself: it updates your other mods and installs new ones from tldmods.net." : "Files: " + string.Join(", ", inst.Files);
-        var descArea = new Rect(x, y, w, area.yMax - y - 12);
-        if (descArea.height < 24) return; // the banner and a long dependency list used the space
-        float th = _wrap.CalcHeight(new GUIContent(desc), w - 22);
-        _descScroll = GUI.BeginScrollView(descArea, _descScroll, new Rect(0, 0, w - 22, th));
-        Lbl(new Rect(0, 0, w - 22, th), desc, _wrap);
+        float th = _wrap.CalcHeight(new GUIContent(L.T(desc)), w);
+        Lbl(new Rect(x, y, w, th), desc, _wrap);
+        _detailsH = y + th + 16;
         GUI.EndScrollView();
     }
 
@@ -357,19 +387,25 @@ static class ManagerUI
     {
         var core = Plugin.Core;
         float x = r.x;
-        if (Btn(new Rect(x, r.y, 190, r.height), L.T("UPDATE ALL") + $" ({_updates})", _updates > 0 ? _btnOn : _btn) && _updates > 0)
+        // buttons are placed left to right, each as wide as its text needs
+        bool Next(string text, GUIStyle s)
+        {
+            float bw = BtnW(text, 150);
+            bool hit = Btn(new Rect(x, r.y, bw, r.height), text, s);
+            x += bw + 8;
+            return hit;
+        }
+        if (Next(L.T("UPDATE ALL") + $" ({_updates})", _updates > 0 ? _btnOn : _btn) && _updates > 0)
             Run(L.T("Updating all mods"), () => core.UpdateAll(onlyAutoUpdate: false));
-        x += 198;
-        if (Btn(new Rect(x, r.y, 210, r.height), "OPEN MODS FOLDER", _btn)) Open(core.ModsDir);
-        x += 218;
-        if (Btn(new Rect(x, r.y, 170, r.height), "REFRESH LIST", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
-        x += 178;
+        if (Next("OPEN MODS FOLDER", _btn)) Open(core.ModsDir);
+        if (Next("REFRESH LIST", _btn)) Run(L.T("Loading catalog"), () => core.LoadCatalog(), changesFiles: false);
         var sel = core.Find(_sel);
         // the free translation service is used for Russian only; the button needs a catalog description to work on
         if (L.Russian && sel != null && sel.Description.Length > 0 &&
-            Btn(new Rect(x, r.y, 250, r.height), ShowTranslation.ContainsKey(sel.Name) ? "SHOW ORIGINAL" : "TRANSLATE DESCRIPTION", _btn))
+            Next(ShowTranslation.ContainsKey(sel.Name) ? "SHOW ORIGINAL" : "TRANSLATE DESCRIPTION", _btn))
             ToggleTranslation(sel);
-        if (Btn(new Rect(r.xMax - 240, r.y, 240, r.height), "RESTART GAME", _restartNeeded ? _btnOn : _btn)) Restart();
+        float rw = BtnW("RESTART GAME", 200);
+        if (Btn(new Rect(r.xMax - rw, r.y, rw, r.height), "RESTART GAME", _restartNeeded ? _btnOn : _btn)) Restart();
         var status = _busy ? _status + "  " + L.T("please wait...") : _restartNeeded && _status.Length == 0 ? L.T("Changes apply after a restart") : _status;
         Lbl(new Rect(r.x, r.y - 28, r.width, 24), status, _statusErr ? _bad : _muted);
     }
@@ -510,6 +546,8 @@ static class ManagerUI
         _bad = Label(new Color(0.88f, 0.42f, 0.36f), 15, FontStyle.Bold);
         _warn = Label(new Color(0.93f, 0.72f, 0.38f), 14, FontStyle.Bold);
         _wrap = Label(Cream, 15); _wrap.wordWrap = true; _wrap.alignment = TextAnchor.UpperLeft;
+        _h2Wrap = Label(Cream, 17, FontStyle.Bold); _h2Wrap.wordWrap = true; _h2Wrap.alignment = TextAnchor.UpperLeft;
+        _okLeft = Label(new Color(0.58f, 0.78f, 0.52f), 15, FontStyle.Bold); // _ok is centred (it labels buttons); dependency lines are left-aligned
         _badge = Box(new Color(0.04f, 0.05f, 0.06f, 0.88f)); _badge.fontSize = 12; _badge.fontStyle = FontStyle.Bold; _badge.alignment = TextAnchor.MiddleCenter;
         _thumbText = Label(Muted, 16, FontStyle.Bold); _thumbText.wordWrap = true; _thumbText.alignment = TextAnchor.MiddleCenter;
         _none = new GUIStyle();

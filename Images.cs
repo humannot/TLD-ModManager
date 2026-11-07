@@ -30,6 +30,9 @@ static class Img
         return null;
     }
 
+    /// <summary>True when loading this image has failed (offline, not a PNG/JPEG, too big): nothing to wait for.</summary>
+    public static bool Failed(string url) => url == null || Textures.TryGetValue(url, out var t) && t == null;
+
     /// <summary>Main thread, once per frame: decode at most two finished downloads.</summary>
     public static void Pump()
     {
