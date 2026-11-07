@@ -1,7 +1,7 @@
 using MelonLoader;
 using MelonLoader.Utils;
 
-[assembly: MelonInfo(typeof(ModManager.Plugin), "ModManager", "1.1.0", "humannot", "https://github.com/humannot/TLD-ModManager")]
+[assembly: MelonInfo(typeof(ModManager.Plugin), "ModManager", "1.2.0", "humannot", "https://github.com/humannot/TLD-ModManager")]
 [assembly: MelonGame("Hinterland", "TheLongDark")]
 [assembly: HarmonyDontPatchAll] // patched by hand in OnApplicationStarted, once the Il2Cpp runtime is ready
 
